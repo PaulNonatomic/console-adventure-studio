@@ -9,7 +9,7 @@
  * Both tabs are rendered at all times (just hidden via CSS)
  * so the terminal's adventure state survives a tab switch.
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Terminal } from './Terminal';
 import { ScenePanel } from './ScenePanel';
 import { PANEL, PANEL_BORDER, PHOSPHOR, DIM, AMBER } from '../lib/theme';
@@ -34,6 +34,23 @@ export function RightPanel({
 	onSelectScene
 }: Props) {
 	const [tab, setTab] = useState<Tab>('inspect');
+
+	// Auto-switch to the inspect tab whenever a scene gets
+	// selected on the graph. The user's intent in clicking a
+	// node is to see / edit that node — but the inspector is
+	// only one of two tabs, and if the user is mid-playtest on
+	// the play tab their click would otherwise do nothing
+	// visible. We respect their tab choice when no scene is
+	// selected; the switch only triggers on a non-null new id.
+	useEffect(() => {
+		if (selectedSceneId !== null && tab !== 'inspect') {
+			setTab('inspect');
+		}
+		// `tab` deliberately excluded — including it would loop
+		// (switch sets tab, effect re-runs).
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedSceneId]);
+
 	const { width, dragging, onMouseDown } = useResizable({
 		initial: 420,
 		min: 320,
