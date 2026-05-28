@@ -97,16 +97,43 @@ export default function App() {
 	// in private browsing / storage-blocked contexts.
 	const saveAvailable = useMemo(() => storageAvailable(), []);
 
-	const [rfNodes, setRfNodes, onNodesChange] = useNodesState<Node>([]);
-	const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>([]);
-
 	const maxScore = useMemo(() => computeMaxScore(json), [json]);
 
-	// Rebuild the React Flow nodes + edges whenever the json
-	// changes. Setter functions are stable (useNodesState gives
-	// them a fixed identity per mount) so this effect runs
-	// strictly on json / maxScore changes, not on every render.
+	// Seed useNodesState / useEdgesState with the computed
+	// graph on the FIRST render. Previously they started as
+	// empty arrays and got populated by a useEffect — but
+	// React Flow's `fitView` prop fires once on mount, and an
+	// empty-nodes fit lands on whatever React Flow's fallback
+	// viewport happens to be (NOT on fitViewOptions). When the
+	// real nodes arrived via setRfNodes a tick later, fitView
+	// was already done, so the zoom got stuck at the fallback.
+	// `useMemo` with empty deps captures the initial json /
+	// maxScore at mount; `key={jsonVersion}` remounts to refresh
+	// on structural changes.
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	const initialGraph = useMemo(() => {
+		const built = buildGraph(json, maxScore);
+		return {
+			nodes: layoutGraph(built.nodes, built.edges, json.start),
+			edges: built.edges
+		};
+	}, []);
+
+	const [rfNodes, setRfNodes, onNodesChange] = useNodesState<Node>(
+		initialGraph.nodes
+	);
+	const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>(
+		initialGraph.edges
+	);
+
+	// Sync into React Flow's state on subsequent json edits
+	// (which don't bump jsonVersion / cause a remount).
+	const isFirstRenderRef = useRef(true);
 	useEffect(() => {
+		if (isFirstRenderRef.current) {
+			isFirstRenderRef.current = false;
+			return;
+		}
 		const built = buildGraph(json, maxScore);
 		setRfNodes(layoutGraph(built.nodes, built.edges, json.start));
 		setRfEdges(built.edges);
