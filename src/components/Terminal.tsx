@@ -1,9 +1,9 @@
-/**
+﻿/**
  * In-studio playtest terminal.
  *
  * Boots a real `Adventure` from `console-adventure` with the
  * loaded JSON, plugs in a custom `Logger` that captures each
- * `console.log("%c…", style)` call into React state instead of
+ * `console.log("%câ€¦", style)` call into React state instead of
  * the browser console, and renders the captured lines with the
  * brand styling preserved.
  *
@@ -50,7 +50,7 @@ export function Terminal({ json }: Props) {
 	const linesEndRef = useRef<HTMLDivElement | null>(null);
 
 	// Stable logger that pushes into state. Using a setter ref so
-	// the logger reference itself never needs to change — the
+	// the logger reference itself never needs to change â€” the
 	// adventure binds to it once at construction.
 	const linesSetterRef = useRef(setLines);
 	useEffect(() => {
@@ -67,7 +67,7 @@ export function Terminal({ json }: Props) {
 	);
 
 	// Build a fresh adventure whenever the JSON changes. The
-	// previous instance is dropped (no cleanup needed — it's
+	// previous instance is dropped (no cleanup needed â€” it's
 	// just state held in a closure).
 	useEffect(() => {
 		try {
@@ -78,7 +78,7 @@ export function Terminal({ json }: Props) {
 			adventureRef.current = null;
 			setLines([
 				{
-					message: `%c   ⚠ Could not load adventure: ${(err as Error).message}`,
+					message: `%c   âš  Could not load adventure: ${(err as Error).message}`,
 					styles: [`color: ${MAGENTA};`]
 				}
 			]);
@@ -107,7 +107,7 @@ export function Terminal({ json }: Props) {
 	}
 
 	// Compute current state purely from the adventure ref + tick
-	// — the engine is the source of truth.
+	// â€” the engine is the source of truth.
 	const state = useMemo(() => {
 		void tick; // dependency only
 		return adventureRef.current?.getState() ?? null;
@@ -216,7 +216,7 @@ export function Terminal({ json }: Props) {
  * Hanging indent: console-adventure prefixes every line with
  * a literal `   ` (or `     ` for choices) for indentation. In
  * a narrow viewport that string wraps and the continuation
- * lands at column 0 — visually broken. So we strip the leading
+ * lands at column 0 â€” visually broken. So we strip the leading
  * whitespace from the message and re-apply it as
  * `padding-left` (in `ch` units, exact for monospace) so the
  * first line and every wrap continuation share the same x.
@@ -224,9 +224,9 @@ export function Terminal({ json }: Props) {
 function TerminalLine({ line }: { line: LogLine }) {
 	const segments = line.message.split('%c');
 
-	// Empty `console.log('')` calls — the engine emits these
-	// intentionally between sections (heading → narration →
-	// choices → prompt) for paragraph breaks. An empty <div>
+	// Empty `console.log('')` calls â€” the engine emits these
+	// intentionally between sections (heading â†’ narration â†’
+	// choices â†’ prompt) for paragraph breaks. An empty <div>
 	// collapses to zero height, so render a non-breaking space
 	// so the browser gives the line a full line-height of
 	// vertical room. Without this, the paragraph breaks
@@ -280,7 +280,7 @@ function TerminalLine({ line }: { line: LogLine }) {
 
 /**
  * Turn a `console.log` CSS string (`"color: red; font-weight: bold;"`)
- * into a React `style` prop object. Kept minimal — we only
+ * into a React `style` prop object. Kept minimal â€” we only
  * need to handle the props that the engine actually emits
  * (color, background, font-family, font-size, font-weight,
  * letter-spacing, line-height), not arbitrary CSS.
@@ -294,7 +294,7 @@ function cssStringToObject(css: string | undefined): React.CSSProperties {
 		const key = rawKey.trim();
 		const value = rest.join(':').trim();
 		if (!key || !value) continue;
-		// kebab-case → camelCase so React accepts it.
+		// kebab-case â†’ camelCase so React accepts it.
 		const camel = key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 		out[camel] = value;
 	}
@@ -340,5 +340,5 @@ function TermButton({
 }
 
 function truncate(s: string, n: number): string {
-	return s.length <= n ? s : s.slice(0, n - 1) + '…';
+	return s.length <= n ? s : s.slice(0, n - 1) + 'â€¦';
 }
