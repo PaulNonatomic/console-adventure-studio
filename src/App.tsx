@@ -84,6 +84,9 @@ import { updateChoice, addSceneFromChoice } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
+import { ScriptView } from './components/ScriptView';
+import { ViewToggle } from './components/ViewToggle';
+import { loadViewMode, saveViewMode, type ViewMode } from './lib/viewMode';
 import type { PlayState } from './components/Terminal';
 
 const EMPTY_PLAYSTATE: PlayState = {
@@ -201,6 +204,16 @@ function AppInner() {
 	const [playFrom, setPlayFrom] = useState<string | null>(null);
 	const [playRequestId, setPlayRequestId] = useState(0);
 	const [rightTab, setRightTab] = useState<Tab>('inspect');
+
+	// Move 04 — top-level view mode (graph / write / split).
+	// Persisted to localStorage so the author lands back in
+	// whichever surface they were last in. Defaults to graph so
+	// existing users see nothing change.
+	const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewMode());
+	const handleViewModeChange = useCallback((m: ViewMode) => {
+		setViewMode(m);
+		saveViewMode(m);
+	}, []);
 
 	/**
 	 * "▶ play from here" — boot the playtest at a specific
@@ -519,6 +532,38 @@ function AppInner() {
 				onError={setError}
 			/>
 
+			{/* View-mode sub-bar — sits beneath the toolbar so
+			    it's always visible without competing with the
+			    load / save / ship actions for toolbar real
+			    estate. Stats on the left double as a glance at
+			    the document's shape. */}
+			<div
+				style={{
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'space-between',
+					padding: '6px 18px',
+					background: PANEL,
+					borderBottom: `1px solid ${PANEL_BORDER}`,
+					fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
+					fontSize: 10,
+					color: DIM
+				}}
+			>
+				<span>
+					~/adventure ·{' '}
+					<span style={{ color: PHOSPHOR }}>
+						{Object.keys(json.scenes).length}
+					</span>{' '}
+					scenes ·{' '}
+					<span style={{ color: PHOSPHOR }}>
+						{Object.values(json.scenes).reduce((n, s) => n + s.choices.length, 0)}
+					</span>{' '}
+					choices · max <span style={{ color: PHOSPHOR }}>{maxScore}</span>
+				</span>
+				<ViewToggle mode={viewMode} onChange={handleViewModeChange} />
+			</div>
+
 			{showShipDialog && (
 				<ShipDialog
 					json={json}
@@ -566,7 +611,11 @@ function AppInner() {
 
 			<MarkerDefs />
 
-			{selectedScene && !inlineCollapsed && (
+			{/* Inline scene editor only makes sense when the
+			    graph is on-screen — it anchors to a node's
+			    screen coords via the React Flow instance. Hidden
+			    in write mode. */}
+			{viewMode !== 'write' && selectedScene && !inlineCollapsed && (
 				<InlineSceneEditor
 					json={json}
 					sceneId={selectedScene}
@@ -581,6 +630,29 @@ function AppInner() {
 			)}
 
 			<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+				{/* ScriptView occupies the full canvas area in
+				    write mode and the right half in split. The
+				    graph canvas + right panel render in graph and
+				    split modes (right panel only in graph — split
+				    drops it to make room for the script). */}
+				{viewMode === 'write' && (
+					<ScriptView
+						json={json}
+						maxScore={maxScore}
+						selectedSceneId={selectedScene}
+						onJsonChange={handleJsonChange}
+						onSelectScene={setSelectedScene}
+						onPlayFromHere={(sceneId) => {
+							handlePlayFromHere(sceneId);
+							// In write mode there's no right panel,
+							// so flip to graph so the Terminal that
+							// "play from here" just booted is visible.
+							handleViewModeChange('graph');
+						}}
+					/>
+				)}
+
+				{(viewMode === 'graph' || viewMode === 'split') && (
 				<div style={{ flex: 1, position: 'relative' }}>
 					<ReactFlow
 						key={jsonVersion}
@@ -681,21 +753,54 @@ function AppInner() {
 						</button>
 					)}
 				</div>
+				)}
 
-				<RightPanel
-					json={json}
-					jsonVersion={jsonVersion}
-					maxScore={maxScore}
-					selectedSceneId={selectedScene}
-					playFrom={playFrom}
-					playRequestId={playRequestId}
-					tab={rightTab}
-					onTabChange={setRightTab}
-					onJsonChange={handleJsonChange}
-					onSelectScene={setSelectedScene}
-					onPlayStateChange={setPlayState}
-					onClearPlayFrom={() => setPlayFrom(null)}
-				/>
+				{/* Split mode — second half hosts the ScriptView.
+				    Border on its left separates it visually from
+				    the graph. Right panel is omitted in split to
+				    make room (per the design handoff). */}
+				{viewMode === 'split' && (
+					<div
+						style={{
+							flex: 1,
+							display: 'flex',
+							borderLeft: `1px solid ${PANEL_BORDER}`,
+							minWidth: 0
+						}}
+					>
+						<ScriptView
+							json={json}
+							maxScore={maxScore}
+							selectedSceneId={selectedScene}
+							onJsonChange={handleJsonChange}
+							onSelectScene={setSelectedScene}
+							onPlayFromHere={(sceneId) => {
+								handlePlayFromHere(sceneId);
+								handleViewModeChange('graph');
+							}}
+						/>
+					</div>
+				)}
+
+				{/* RightPanel rides alongside only in graph mode.
+				    Split mode replaces it with the ScriptView half;
+				    write mode is full-document. */}
+				{viewMode === 'graph' && (
+					<RightPanel
+						json={json}
+						jsonVersion={jsonVersion}
+						maxScore={maxScore}
+						selectedSceneId={selectedScene}
+						playFrom={playFrom}
+						playRequestId={playRequestId}
+						tab={rightTab}
+						onTabChange={setRightTab}
+						onJsonChange={handleJsonChange}
+						onSelectScene={setSelectedScene}
+						onPlayStateChange={setPlayState}
+						onClearPlayFrom={() => setPlayFrom(null)}
+					/>
+				)}
 			</div>
 		</div>
 	);
