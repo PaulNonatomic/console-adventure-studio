@@ -54,7 +54,7 @@ import '@xyflow/react/dist/style.css';
  * Adjust these and the log + the canvas behaviour both move
  * together.
  */
-const DEFAULT_MIN_ZOOM = 0.6;
+const DEFAULT_MIN_ZOOM = 1.056;
 const DEFAULT_MAX_ZOOM = 1.6;
 
 import { Toolbar } from './components/Toolbar';
