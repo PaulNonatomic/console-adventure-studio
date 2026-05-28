@@ -15,7 +15,13 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci
+      # `npm install` rather than `npm ci` — the lockfile is
+      # generated on Windows by the author and vitest 4 includes
+      # platform-specific optional deps (@emnapi/*, esbuild
+      # Linux variants) that don't end up in a Windows-authored
+      # lockfile. `npm install` resolves them at install time
+      # instead of insisting on bit-exact lockfile parity.
+      - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
