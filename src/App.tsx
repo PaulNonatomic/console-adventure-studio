@@ -41,7 +41,9 @@ import {
 	MiniMap,
 	type Node,
 	type Edge,
+	type Connection,
 	type OnSelectionChangeParams,
+	type FinalConnectionState,
 	BackgroundVariant,
 	useNodesState,
 	useEdgesState
@@ -78,6 +80,7 @@ import { computeMaxScore } from 'console-adventure';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';
+import { updateChoice, addSceneFromChoice } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
@@ -272,6 +275,61 @@ function AppInner() {
 		(next: AdventureJson, opts?: { remount?: boolean }) => {
 			setJson(next);
 			if (opts?.remount) setJsonVersion((v) => v + 1);
+		},
+		[]
+	);
+
+	/**
+	 * Drag-to-wire: user dragged a choice's source handle onto
+	 * another node and released. Parse the choice index out of
+	 * the source handle id (`c-${i}`), then rewire the choice's
+	 * `next` in-place — no remount, so the edge re-routes
+	 * immediately and the node selection stays put.
+	 *
+	 * Dropping onto the synthetic finish node sets `next: null`
+	 * so the wire-up matches the schema's terminal semantics.
+	 */
+	const handleConnect = useCallback(
+		(c: Connection) => {
+			const i = Number(c.sourceHandle?.replace('c-', ''));
+			if (!c.source || Number.isNaN(i)) return;
+			const next = c.target === FINISH_NODE_ID ? null : c.target;
+			setJson((prev) => updateChoice(prev, c.source!, i, { next }));
+		},
+		[]
+	);
+
+	/**
+	 * Drop-to-create: user dragged a choice's source handle onto
+	 * empty canvas and released. v12 surfaces this via
+	 * `onConnectEnd` with a `FinalConnectionState` whose
+	 * `isValid` is false (no node target). Spawn a fresh scene,
+	 * wire the choice to it, structurally remount so layout +
+	 * fitView re-frame the graph around the new node, and select
+	 * the new scene so the inline editor opens on it.
+	 *
+	 * Per the design handoff Decision A: we deliberately ignore
+	 * the cursor drop coordinates — `layoutGraph` re-computes
+	 * positions on every rebuild, so honouring the drop point
+	 * would just look like a glitch as the node snaps to its
+	 * BFS-derived slot.
+	 */
+	const handleConnectEnd = useCallback(
+		(_event: MouseEvent | TouchEvent, conn: FinalConnectionState) => {
+			if (conn.isValid) return; // onConnect already handled it
+			const sourceId = conn.fromNode?.id;
+			const i = Number(conn.fromHandle?.id?.replace('c-', ''));
+			if (!sourceId || Number.isNaN(i)) return;
+			setJson((prev) => {
+				const { json: nextJson, id } = addSceneFromChoice(prev, sourceId, i);
+				// Defer the selection update so it lands after the
+				// effect that rebuilds the graph — otherwise the
+				// node we just created hasn't been emitted yet and
+				// React Flow drops the `selected` flag.
+				queueMicrotask(() => setSelectedScene(id));
+				return nextJson;
+			});
+			setJsonVersion((v) => v + 1);
 		},
 		[]
 	);
@@ -483,6 +541,13 @@ function AppInner() {
 						edges={rfEdges}
 						onNodesChange={onNodesChange}
 						onEdgesChange={onEdgesChange}
+						onConnect={handleConnect}
+						onConnectEnd={handleConnectEnd}
+						connectionLineStyle={{
+							stroke: PHOSPHOR,
+							strokeWidth: 2,
+							strokeDasharray: '2 5'
+						}}
 						nodeTypes={nodeTypes}
 						onSelectionChange={handleSelectionChange}
 						fitView

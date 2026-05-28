@@ -128,6 +128,43 @@ export function deleteChoice(
 	});
 }
 
+/**
+ * Reorder a single choice within a scene's choice list (drag-to-
+ * reorder support in the inline editor). Out-of-range indices
+ * silently no-op so the caller can be naive about bounds.
+ */
+export function moveChoice(
+	json: AdventureJson,
+	sceneId: string,
+	from: number,
+	to: number
+): AdventureJson {
+	const scene = json.scenes[sceneId];
+	if (!scene) return json;
+	const n = scene.choices.length;
+	if (from < 0 || from >= n || to < 0 || to >= n || from === to) return json;
+	const next = scene.choices.slice();
+	const [moved] = next.splice(from, 1);
+	next.splice(to, 0, moved);
+	return updateScene(json, sceneId, { choices: next });
+}
+
+/**
+ * Drop-to-create: spawn a fresh scene AND rewire the chosen
+ * choice on `sceneId` to point at it, in one atomic update.
+ * Used by `onConnectEnd` in App.tsx when the user drags a choice
+ * handle out to empty canvas. Returns the new json + the new
+ * scene's id so the caller can immediately select it.
+ */
+export function addSceneFromChoice(
+	json: AdventureJson,
+	sceneId: string,
+	choiceIndex: number
+): { json: AdventureJson; id: string } {
+	const { json: j2, id } = addScene(json);
+	return { json: updateChoice(j2, sceneId, choiceIndex, { next: id }), id };
+}
+
 // ─── adventure-level edits ────────────────────────────────────
 
 export function setStart(json: AdventureJson, sceneId: string): AdventureJson {

@@ -146,16 +146,18 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 				}}
 			/>
 
-			<div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+			<div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
 				{d.choices.map((c, i) => (
 					<div
 						key={i}
 						style={{
 							display: 'flex',
 							justifyContent: 'space-between',
-							alignItems: 'baseline',
+							alignItems: 'center',
 							fontSize: 10,
-							lineHeight: 1.3
+							lineHeight: 1.3,
+							position: 'relative',
+							paddingRight: 8
 						}}
 					>
 						<span
@@ -172,15 +174,34 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 							{i + 1}) {c.label}
 						</span>
 						{c.points !== undefined && (
-							<span style={{ color: PHOSPHOR, fontWeight: 700 }}>
+							<span
+								style={{ color: PHOSPHOR, fontWeight: 700, marginRight: 12 }}
+							>
 								+{c.points}
 							</span>
 						)}
+						{/* Per-choice source handle. Position.Right +
+						    an absolute top:50% pins it to the row's
+						    vertical centre on the right edge of the
+						    node. The handle id `c-${i}` is parsed by
+						    onConnect / onConnectEnd in App.tsx and
+						    must match the sourceHandle set in
+						    graph.ts. */}
+						<Handle
+							type="source"
+							id={`c-${i}`}
+							position={Position.Right}
+							style={{
+								background: AMBER,
+								width: 8,
+								height: 8,
+								border: `2px solid ${PANEL}`,
+								right: -18
+							}}
+						/>
 					</div>
 				))}
 			</div>
-
-			<Handle type="source" position={Position.Bottom} style={{ background: AMBER }} />
 		</div>
 	);
 }

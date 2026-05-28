@@ -16,6 +16,8 @@ import {
 	updateChoice,
 	addChoice,
 	deleteChoice,
+	moveChoice,
+	addSceneFromChoice,
 	setStart,
 	updateTier,
 	addTier,
@@ -199,5 +201,55 @@ describe('share helpers', () => {
 		const next = updateShare(withShare, { intent: 'bluesky' });
 		expect(next.share?.intent).toBe('bluesky');
 		expect(next.share?.text).toBe(withShare.share?.text); // untouched
+	});
+});
+
+describe('moveChoice', () => {
+	it('reorders a choice forward', () => {
+		const json = baseAdventure();
+		const next = moveChoice(json, 'a', 0, 1);
+		expect(next.scenes.a.choices.map((c) => c.label)).toEqual(['stay', 'go b']);
+	});
+
+	it('reorders a choice backward', () => {
+		const json = baseAdventure();
+		const next = moveChoice(json, 'a', 1, 0);
+		expect(next.scenes.a.choices.map((c) => c.label)).toEqual(['stay', 'go b']);
+	});
+
+	it('no-ops on out-of-range indices', () => {
+		const json = baseAdventure();
+		expect(moveChoice(json, 'a', 0, 5)).toBe(json);
+		expect(moveChoice(json, 'a', -1, 0)).toBe(json);
+	});
+
+	it('no-ops on same-position move', () => {
+		const json = baseAdventure();
+		expect(moveChoice(json, 'a', 0, 0)).toBe(json);
+	});
+
+	it('no-ops on missing scene', () => {
+		const json = baseAdventure();
+		expect(moveChoice(json, 'missing', 0, 1)).toBe(json);
+	});
+});
+
+describe('addSceneFromChoice', () => {
+	it('creates a new scene AND rewires the named choice to it', () => {
+		const json = baseAdventure();
+		const { json: next, id } = addSceneFromChoice(json, 'a', 0);
+		expect(id).toBeDefined();
+		expect(next.scenes[id]).toBeDefined();
+		expect(next.scenes.a.choices[0].next).toBe(id);
+		// Untouched choices stay intact.
+		expect(next.scenes.a.choices[1].next).toBe(null);
+		expect(next.scenes.b.choices[0].next).toBe('a');
+	});
+
+	it('returns a usable id pointing at a non-empty stub scene', () => {
+		const json = baseAdventure();
+		const { json: next, id } = addSceneFromChoice(json, 'a', 1);
+		expect(next.scenes[id].choices.length).toBeGreaterThan(0);
+		expect(next.scenes.a.choices[1].next).toBe(id);
 	});
 });

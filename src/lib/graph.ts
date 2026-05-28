@@ -131,6 +131,11 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 			edges.push({
 				id: `${sceneId}-${i}-${target}`,
 				source: sceneId,
+				// Choice-addressed source handle — must match the
+				// `id` set on the per-choice <Handle> in SceneNode.
+				// Without this, edges fall back to React Flow's
+				// default source slot and don't route from the row.
+				sourceHandle: `c-${i}`,
 				target,
 				label: `${i + 1}) ${truncate(choice.label, 28)}${points ? `  +${points}` : ''}`,
 				labelBgPadding: EDGE_LABEL_BG_PADDING,
