@@ -20,6 +20,7 @@ import {
 	VOID
 } from '../lib/theme';
 import { Button } from './Inputs';
+import { useConfirm } from '../lib/confirm';
 import type { AdventureJson } from 'console-adventure';
 
 interface Props {
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export function LoadDialog({ onClose, onLoad }: Props) {
+	const confirm = useConfirm();
 	const [entries, setEntries] = useState<SaveEntry[]>(() => listSaves());
 
 	const refresh = useCallback(() => setEntries(listSaves()), []);
@@ -131,8 +133,19 @@ export function LoadDialog({ onClose, onLoad }: Props) {
 									onLoad(entry.save.json, entry.save.name);
 									onClose();
 								}}
-								onDelete={() => {
-									if (window.confirm(`Delete save "${entry.save.name}"?`)) {
+								onDelete={async () => {
+									const ok = await confirm({
+										title: 'Delete save',
+										message: (
+											<>
+												Delete save <strong>{entry.save.name}</strong>? This
+												removes it from localStorage and can't be undone.
+											</>
+										),
+										confirmLabel: 'Delete',
+										tone: 'danger'
+									});
+									if (ok) {
 										deleteSave(entry.id);
 										refresh();
 									}

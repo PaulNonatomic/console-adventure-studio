@@ -21,6 +21,7 @@ import {
 	deleteChoice,
 	deleteScene
 } from '../lib/edit';
+import { useConfirm } from '../lib/confirm';
 
 interface Props {
 	json: AdventureJson;
@@ -39,6 +40,7 @@ const sectionLabel = {
 } as const;
 
 export function SceneEditor({ json, sceneId, onJsonChange, onSelectScene }: Props) {
+	const confirm = useConfirm();
 	const scene = json.scenes[sceneId];
 	if (!scene) return null;
 
@@ -174,9 +176,20 @@ export function SceneEditor({ json, sceneId, onJsonChange, onSelectScene }: Prop
 				<Button
 					label={canDelete ? 'delete scene' : 'delete scene (set start first)'}
 					color={canDelete ? 'danger' : 'dim'}
-					onClick={() => {
+					onClick={async () => {
 						if (!canDelete) return;
-						if (window.confirm(`Delete scene "${sceneId}"?`)) {
+						const ok = await confirm({
+							title: 'Delete scene',
+							message: (
+								<>
+									Delete scene <strong>{sceneId}</strong>? Any choices pointing
+									here will be rewired to <strong>finish</strong> (null).
+								</>
+							),
+							confirmLabel: 'Delete',
+							tone: 'danger'
+						});
+						if (ok) {
 							onJsonChange(deleteScene(json, sceneId));
 							onSelectScene(null);
 						}

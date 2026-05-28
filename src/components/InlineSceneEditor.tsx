@@ -47,6 +47,7 @@ import {
 	deleteChoice,
 	deleteScene
 } from '../lib/edit';
+import { useConfirm } from '../lib/confirm';
 
 interface Props {
 	json: AdventureJson;
@@ -82,6 +83,7 @@ export function InlineSceneEditor({
 	onSceneDeleted
 }: Props) {
 	const rf = useReactFlow();
+	const confirm = useConfirm();
 	// Subscribe to the React Flow viewport transform so this
 	// component re-renders on every pan / zoom. `transform` is
 	// `[x, y, zoom]` — we don't use the value directly (we go
@@ -402,9 +404,20 @@ export function InlineSceneEditor({
 					<FooterButton
 						color={MAGENTA}
 						disabled={isStart}
-						onClick={() => {
+						onClick={async () => {
 							if (isStart) return;
-							if (window.confirm(`Delete scene "${sceneId}"? Any choices pointing here will be rewired to finish (null).`)) {
+							const ok = await confirm({
+								title: 'Delete scene',
+								message: (
+									<>
+										Delete scene <strong>{sceneId}</strong>? Any choices pointing
+										here will be rewired to <strong>finish</strong> (null).
+									</>
+								),
+								confirmLabel: 'Delete',
+								tone: 'danger'
+							});
+							if (ok) {
 								onJsonChange(deleteScene(json, sceneId));
 								onSceneDeleted();
 							}

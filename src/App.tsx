@@ -86,6 +86,7 @@ import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
+import { ConfirmProvider, useConfirm } from './lib/confirm';
 import { ScriptView } from './components/ScriptView';
 import { ViewToggle } from './components/ViewToggle';
 import { FlowDirectionToggle } from './components/FlowDirectionToggle';
@@ -176,13 +177,16 @@ const edgeTypes = { merged: MergedEdge };
  */
 export default function App() {
 	return (
-		<ReactFlowProvider>
-			<AppInner />
-		</ReactFlowProvider>
+		<ConfirmProvider>
+			<ReactFlowProvider>
+				<AppInner />
+			</ReactFlowProvider>
+		</ConfirmProvider>
 	);
 }
 
 function AppInner() {
+	const confirm = useConfirm();
 	const [json, setJson] = useState<AdventureJson>(FOUNDRY_EXAMPLE);
 	const [jsonVersion, setJsonVersion] = useState(0);
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
@@ -521,21 +525,26 @@ function AppInner() {
 	 * Also clears the selection so the inline editor unmounts
 	 * cleanly after deletion.
 	 */
-	const handleDeleteSelected = useCallback(() => {
+	const handleDeleteSelected = useCallback(async () => {
 		if (!selectedScene) return;
 		if (json.start === selectedScene) return;
-		if (
-			!window.confirm(
-				`Delete scene "${selectedScene}"? Any choices pointing here will be rewired to finish (null).`
-			)
-		) {
-			return;
-		}
+		const ok = await confirm({
+			title: 'Delete scene',
+			message: (
+				<>
+					Delete scene <strong>{selectedScene}</strong>? Any choices pointing
+					here will be rewired to <strong>finish</strong> (null).
+				</>
+			),
+			confirmLabel: 'Delete',
+			tone: 'danger'
+		});
+		if (!ok) return;
 		const next = deleteScene(json, selectedScene);
 		setJson(next);
 		setSelectedScene(null);
 		setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
-	}, [selectedScene, json, setRfNodes]);
+	}, [selectedScene, json, setRfNodes, confirm]);
 
 	useEffect(() => {
 		handleDeleteSelectedRef.current = handleDeleteSelected;
@@ -603,26 +612,34 @@ function AppInner() {
 			// committing so a stray drag doesn't pollute the
 			// adventure with empty stub scenes. The wording names
 			// the source choice so the author knows what they're
-			// agreeing to.
-			setJson((prev) => {
-				const choiceLabel = prev.scenes[sourceId]?.choices[i]?.label ?? '(choice)';
-				const ok = window.confirm(
-					`Create a new scene wired up to "${choiceLabel}" (choice ${i + 1} of "${sourceId}")?`
-				);
-				if (!ok) return prev;
-				const { json: nextJson, id } = addSceneFromChoice(prev, sourceId, i);
-				// Defer the selection update so it lands after the
-				// effect that rebuilds the graph — otherwise the
-				// node we just created hasn't been emitted yet and
-				// React Flow drops the `selected` flag.
-				queueMicrotask(() => {
-					setSelectedScene(id);
-					setJsonVersion((v) => v + 1);
+			// agreeing to. We snapshot the choice label from the
+			// current json BEFORE awaiting so the modal message is
+			// derived from the same data that drove the drag.
+			const choiceLabel =
+				json.scenes[sourceId]?.choices[i]?.label ?? '(choice)';
+			void confirm({
+				title: 'Create new scene',
+				message: (
+					<>
+						Create a new scene wired up to <strong>{choiceLabel}</strong>{' '}
+						(choice {i + 1} of <strong>{sourceId}</strong>)?
+					</>
+				),
+				confirmLabel: 'Create scene',
+				tone: 'primary'
+			}).then((ok) => {
+				if (!ok) return;
+				setJson((prev) => {
+					const { json: nextJson, id } = addSceneFromChoice(prev, sourceId, i);
+					queueMicrotask(() => {
+						setSelectedScene(id);
+						setJsonVersion((v) => v + 1);
+					});
+					return nextJson;
 				});
-				return nextJson;
 			});
 		},
-		[]
+		[json, confirm]
 	);
 
 	function loadJson(parsed: unknown) {
