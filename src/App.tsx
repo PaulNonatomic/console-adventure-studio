@@ -1,14 +1,25 @@
 /**
  * Top-level layout: toolbar across the top, graph canvas on
- * the left, inspector panel on the right.
+ * the left, tabbed RightPanel on the right (Inspect / Play).
  *
  * State held here:
  *   - `json`           — current AdventureJson (starts as foundry example)
+ *   - `jsonVersion`    — counter incremented on every load,
+ *                        used as the ReactFlow `key` so the
+ *                        graph cleanly remounts (and re-runs
+ *                        fitView) when the user loads a
+ *                        different adventure
  *   - `selectedScene`  — id of the selected scene node, or null
  *   - `error`          — last error message from a load action
  *
- * The graph re-builds whenever `json` changes; layout is
- * computed once per JSON via useMemo.
+ * The graph runs in *uncontrolled* mode: nodes / edges go in
+ * via `defaultNodes` / `defaultEdges` and React Flow owns
+ * selection state internally. Earlier versions passed them as
+ * controlled `nodes` / `edges` without an `onNodesChange`
+ * handler, which left React Flow unable to propagate selection
+ * to some nodes — clicks visibly did nothing on certain scenes.
+ * Bumping the JSON version key re-mounts the canvas when the
+ * user loads new data.
  */
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -23,7 +34,7 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import { Toolbar } from './components/Toolbar';
-import { ScenePanel } from './components/ScenePanel';
+import { RightPanel } from './components/RightPanel';
 import { SceneNode } from './components/SceneNode';
 import { FinishNode } from './components/FinishNode';
 import { buildGraph, FINISH_NODE_ID } from './lib/graph';
@@ -37,6 +48,7 @@ const nodeTypes = { scene: SceneNode, finish: FinishNode };
 
 export default function App() {
 	const [json, setJson] = useState<AdventureJson>(FOUNDRY_EXAMPLE);
+	const [jsonVersion, setJsonVersion] = useState(0);
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -62,10 +74,7 @@ export default function App() {
 		[]
 	);
 
-	function handleLoadJson(parsed: unknown) {
-		// Lightweight runtime check — the engine's own validator
-		// runs at createAdventure time, but here we're not
-		// instantiating; we just need enough confidence to render.
+	function loadJson(parsed: unknown) {
 		if (
 			!parsed ||
 			typeof parsed !== 'object' ||
@@ -76,6 +85,14 @@ export default function App() {
 			return;
 		}
 		setJson(parsed as AdventureJson);
+		setJsonVersion((v) => v + 1);
+		setSelectedScene(null);
+		setError(null);
+	}
+
+	function loadExample() {
+		setJson(FOUNDRY_EXAMPLE);
+		setJsonVersion((v) => v + 1);
 		setSelectedScene(null);
 		setError(null);
 	}
@@ -90,15 +107,7 @@ export default function App() {
 				color: '#eef0f5'
 			}}
 		>
-			<Toolbar
-				onLoadExample={() => {
-					setJson(FOUNDRY_EXAMPLE);
-					setSelectedScene(null);
-					setError(null);
-				}}
-				onLoadJson={handleLoadJson}
-				onError={setError}
-			/>
+			<Toolbar onLoadExample={loadExample} onLoadJson={loadJson} onError={setError} />
 
 			{error && (
 				<div
@@ -133,20 +142,19 @@ export default function App() {
 			<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 				<div style={{ flex: 1, position: 'relative' }}>
 					<ReactFlow
-						nodes={nodes}
-						edges={edges}
+						// Remount when the loaded JSON changes so React
+						// Flow re-runs fitView and clears any stale
+						// internal selection state.
+						key={jsonVersion}
+						defaultNodes={nodes}
+						defaultEdges={edges}
 						nodeTypes={nodeTypes}
 						onSelectionChange={handleSelectionChange}
 						fitView
-						// `fitView` auto-fits every node into the viewport,
-						// which for the foundry's 7-node × 6-layer graph
-						// lands around 0.5x — readable but loose. The
-						// `minZoom` here is a floor for the auto-fit
-						// specifically (not the canvas overall), so the
-						// default view comes in tighter while a player who
-						// loads a larger script still gets adaptive fitting
-						// down to the canvas-level minZoom.
-						fitViewOptions={{ padding: 0.12, minZoom: 0.85 }}
+						// Push fitView's auto-fit floor up further per
+						// playtest feedback — at <1.0x the choice labels
+						// in node bodies become hard to read.
+						fitViewOptions={{ padding: 0.08, minZoom: 1, maxZoom: 1.6 }}
 						minZoom={0.2}
 						maxZoom={2}
 						proOptions={{ hideAttribution: true }}
@@ -189,7 +197,7 @@ export default function App() {
 					</div>
 				</div>
 
-				<ScenePanel
+				<RightPanel
 					json={json}
 					maxScore={maxScore}
 					selectedSceneId={selectedScene}

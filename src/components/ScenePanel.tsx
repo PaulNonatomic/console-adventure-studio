@@ -4,7 +4,6 @@
  * a stats summary when nothing is selected.
  */
 import {
-	PANEL,
 	PANEL_BORDER,
 	PHOSPHOR,
 	AMBER,
@@ -29,22 +28,14 @@ const sectionLabel = {
 	marginBottom: 6
 } as const;
 
+// The outer aside / width / border are now provided by
+// RightPanel, which hosts both this inspector and the playtest
+// terminal in a tab system. ScenePanel is content-only.
 export function ScenePanel({ json, maxScore, selectedSceneId }: Props) {
 	const scene = selectedSceneId ? json.scenes[selectedSceneId] : null;
 
 	return (
-		<aside
-			style={{
-				width: 360,
-				background: PANEL,
-				borderLeft: `1px solid ${PANEL_BORDER}`,
-				color: TEXT,
-				fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
-				display: 'flex',
-				flexDirection: 'column',
-				overflow: 'hidden'
-			}}
-		>
+		<>
 			<div
 				style={{
 					padding: '14px 18px',
@@ -78,7 +69,7 @@ export function ScenePanel({ json, maxScore, selectedSceneId }: Props) {
 					<AdventureStats json={json} maxScore={maxScore} />
 				)}
 			</div>
-		</aside>
+		</>
 	);
 }
 
