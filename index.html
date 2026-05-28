@@ -4,6 +4,18 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+		<!-- Cache busting while in active development.
+		     GitHub Pages aggressively caches index.html, which holds
+		     the references to vite's content-hashed JS/CSS bundles.
+		     Without these the browser keeps serving the OLD hash
+		     refs even after a deploy, so the user sees stale code.
+		     Once the studio stabilises these can come off and rely
+		     on standard cache control. -->
+		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+		<meta http-equiv="Pragma" content="no-cache" />
+		<meta http-equiv="Expires" content="0" />
+
 		<title>console-adventure-studio</title>
 		<meta
 			name="description"

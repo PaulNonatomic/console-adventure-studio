@@ -96,8 +96,11 @@ export function Toolbar({
 				>
 					console-adventure-studio
 				</span>
-				<span style={{ color: DIM, fontSize: 11 }}>
-					read-only · v0.1
+				<span
+					style={{ color: DIM, fontSize: 11 }}
+					title={`Built ${__BUILD_TIME__}`}
+				>
+					build {__BUILD_TAG__}
 				</span>
 			</div>
 
