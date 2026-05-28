@@ -10,11 +10,19 @@
  * us); the parent app reacts to selection by populating the
  * side panel with full details.
  */
+import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, MAGENTA, TEXT, DIM } from '../lib/theme';
 import type { SceneNodeData } from '../lib/graph';
 
-export function SceneNode({ data, selected }: NodeProps) {
+/**
+ * Wrapped in `React.memo` so React Flow's selection toggle
+ * only re-renders the two nodes whose `selected` flag actually
+ * flipped, rather than the whole node list. Without memo,
+ * clicking any node walks the inline-style tree of every
+ * SceneNode in the graph — measurable lag with 7+ nodes.
+ */
+function SceneNodeImpl({ data, selected }: NodeProps) {
 	const d = data as SceneNodeData;
 	return (
 		<div
@@ -129,3 +137,5 @@ export function SceneNode({ data, selected }: NodeProps) {
 		</div>
 	);
 }
+
+export const SceneNode = memo(SceneNodeImpl);

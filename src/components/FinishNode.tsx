@@ -6,12 +6,19 @@
  * score range resolves to. Visually distinct from scene nodes
  * — magenta border, "FINISH" header.
  */
+import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { MAGENTA, PHOSPHOR, AMBER, TEXT, DIM, PANEL } from '../lib/theme';
 import type { FinishNodeData } from '../lib/graph';
 import { colorForTierSlot } from '../lib/theme';
 
-export function FinishNode({ data }: NodeProps) {
+/**
+ * Memo'd for the same reason SceneNode is — the finish node
+ * doesn't actually accept a selection toggle, but it's rendered
+ * inside the same node-iteration loop and benefits from props
+ * equality bailout.
+ */
+function FinishNodeImpl({ data }: NodeProps) {
 	const d = data as FinishNodeData;
 	return (
 		<div
@@ -94,3 +101,5 @@ export function FinishNode({ data }: NodeProps) {
 		</div>
 	);
 }
+
+export const FinishNode = memo(FinishNodeImpl);

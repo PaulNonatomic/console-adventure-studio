@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  console-adventure-studio favicon.
+
+  Stylised three-node graph in the brand palette. The top node
+  (lime) is the start; the two bottom nodes (amber + magenta)
+  are the branches; thin lines connect them. Reads as both a
+  graph icon AND the silhouette of the foundry's branching
+  entry → arcade / workshop fork.
+
+  Sized for a 32×32 favicon but rendered as SVG so it scales
+  cleanly to any size the browser asks for.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+	<rect width="32" height="32" rx="6" fill="#0A0A0F"/>
+
+	<!-- branch edges (drawn first so nodes overlay them cleanly) -->
+	<line x1="16" y1="9" x2="9" y2="23" stroke="#F5A623" stroke-width="1.6" stroke-linecap="round"/>
+	<line x1="16" y1="9" x2="23" y2="23" stroke="#F5A623" stroke-width="1.6" stroke-linecap="round"/>
+
+	<!-- start node, top, lime -->
+	<circle cx="16" cy="9" r="4" fill="#C7F441"/>
+
+	<!-- left branch, amber -->
+	<circle cx="9" cy="23" r="3.5" fill="#F5A623"/>
+
+	<!-- right branch, magenta -->
+	<circle cx="23" cy="23" r="3.5" fill="#FF388F"/>
+</svg>
