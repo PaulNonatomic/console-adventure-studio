@@ -253,8 +253,19 @@ export function buildGraph(
 				edges.push({
 					id: `${sceneId}->${target}#merged`,
 					source: sceneId,
+					// Anchor the React-Flow-tracked source at the
+					// first row so default labelX/labelY computation
+					// has somewhere to start. The custom edge type
+					// uses `data.sourceHandleIds` to draw spokes from
+					// EVERY participating row, not just this one.
 					sourceHandle: `c-${first.choiceIndex}`,
 					target,
+					type: 'merged',
+					data: {
+						sourceHandleIds: group.map(
+							({ choiceIndex }) => `c-${choiceIndex}`
+						)
+					},
 					label: segments.join('  ·  '),
 					labelBgPadding: EDGE_LABEL_BG_PADDING,
 					labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,

@@ -57,6 +57,13 @@ describe('buildGraph parallel-edge merging', () => {
 		// the merged form so it can't collide with a solo edge.
 		expect(fromA[0].sourceHandle).toBe('c-0');
 		expect(fromA[0].id).toBe('a->b#merged');
+		expect(fromA[0].type).toBe('merged');
+		// Source handle ids carried through data so MergedEdge
+		// can draw a spoke from each participating row.
+		expect((fromA[0].data as { sourceHandleIds: string[] }).sourceHandleIds).toEqual([
+			'c-0',
+			'c-1'
+		]);
 		const label = fromA[0].label as string;
 		expect(label).toContain('1) left');
 		expect(label).toContain('2) right');

@@ -74,6 +74,7 @@ import { Toolbar } from './components/Toolbar';
 import { RightPanel, type Tab } from './components/RightPanel';
 import { SceneNode } from './components/SceneNode';
 import { FinishNode } from './components/FinishNode';
+import { MergedEdge } from './components/MergedEdge';
 import { LoadDialog } from './components/LoadDialog';
 import { buildGraph, FINISH_NODE_ID, ARROW_MARKER_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
@@ -155,6 +156,10 @@ function MarkerDefs() {
 import type { AdventureJson } from 'console-adventure';
 
 const nodeTypes = { scene: SceneNode, finish: FinishNode };
+// Custom edge types. Lifted to module scope (matches nodeTypes
+// pattern above) so React Flow doesn't see a new reference on
+// every render and complain via its console warning.
+const edgeTypes = { merged: MergedEdge };
 
 /**
  * Outermost wrapper. The Provider is mounted here so any
@@ -866,6 +871,7 @@ function AppInner() {
 							strokeDasharray: '2 5'
 						}}
 						nodeTypes={nodeTypes}
+						edgeTypes={edgeTypes}
 						onSelectionChange={handleSelectionChange}
 						fitView
 						fitViewOptions={{
