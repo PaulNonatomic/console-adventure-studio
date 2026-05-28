@@ -15,7 +15,7 @@
  * just produces *unpositioned* nodes/edges.
  */
 import type { Node, Edge } from '@xyflow/react';
-import type { AdventureJson } from 'console-adventure';
+import type { AdventureJson, Scene } from 'console-adventure';
 import { AMBER, CYAN, PANEL_BORDER, VOID } from './theme';
 import { validate } from './validate';
 
@@ -172,40 +172,99 @@ export function buildGraph(
 			} satisfies SceneNodeData
 		});
 
-		// One edge per choice. ID encodes source + choice index +
-		// target so multiple choices going to the same next scene
-		// don't collide.
+		// Group choices by their target scene so multiple choices
+		// from this scene that point at the same next scene
+		// collapse into a single visual wire. Without this, a
+		// scene with five choices that all loop back to a hub
+		// renders as five parallel amber wires — visually noisy
+		// and hard to read once a graph gets dense.
+		const choicesByTarget = new Map<
+			string,
+			Array<{ choiceIndex: number; choice: Scene['choices'][number] }>
+		>();
 		scene.choices.forEach((choice, i) => {
 			const target = choice.next ?? FINISH_NODE_ID;
-			const points = choice.points ?? 0;
-			const edgeKey = `${sceneId}-${i}`;
+			const group = choicesByTarget.get(target);
+			if (group) {
+				group.push({ choiceIndex: i, choice });
+			} else {
+				choicesByTarget.set(target, [{ choiceIndex: i, choice }]);
+			}
+		});
+
+		for (const [target, group] of choicesByTarget) {
 			// Edge style switches on the run:
-			//   - run active + edge taken → cyan thick line
-			//   - run active + edge not taken → dim dashed
+			//   - run active + ANY constituent taken → cyan thick
+			//   - run active + none taken → dim dashed
 			//   - no run → default amber
+			const anyTaken = group.some(({ choiceIndex }) =>
+				takenEdgeSet.has(`${sceneId}-${choiceIndex}`)
+			);
 			const style = hasActiveRun
-				? takenEdgeSet.has(edgeKey)
+				? anyTaken
 					? EDGE_STROKE_STYLE_TAKEN
 					: EDGE_STROKE_STYLE_DIM
 				: EDGE_STROKE_STYLE;
-			edges.push({
-				id: `${sceneId}-${i}-${target}`,
-				source: sceneId,
-				// Choice-addressed source handle — must match the
-				// `id` set on the per-choice <Handle> in SceneNode.
-				// Without this, edges fall back to React Flow's
-				// default source slot and don't route from the row.
-				sourceHandle: `c-${i}`,
-				target,
-				label: `${i + 1}) ${truncate(choice.label, 28)}${points ? `  +${points}` : ''}`,
-				labelBgPadding: EDGE_LABEL_BG_PADDING,
-				labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,
-				labelStyle: EDGE_LABEL_STYLE,
-				labelBgStyle: EDGE_LABEL_BG_STYLE,
-				style,
-				markerEnd: ARROW_MARKER
-			});
-		});
+
+			if (group.length === 1) {
+				// Solo edge — keep the per-choice id + handle so
+				// drag-to-wire and the v12 sourceHandle routing
+				// still target the correct row.
+				const { choiceIndex, choice } = group[0];
+				const points = choice.points ?? 0;
+				edges.push({
+					id: `${sceneId}-${choiceIndex}-${target}`,
+					source: sceneId,
+					sourceHandle: `c-${choiceIndex}`,
+					target,
+					label: `${choiceIndex + 1}) ${truncate(choice.label, 28)}${
+						points ? `  +${points}` : ''
+					}`,
+					labelBgPadding: EDGE_LABEL_BG_PADDING,
+					labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,
+					labelStyle: EDGE_LABEL_STYLE,
+					labelBgStyle: EDGE_LABEL_BG_STYLE,
+					style,
+					markerEnd: ARROW_MARKER
+				});
+			} else {
+				// Merged edge — one visual wire carrying all the
+				// choices that share this target. Per-choice
+				// labels join with " · " so the author still sees
+				// which choices are bundled. Truncate harder when
+				// merged so the combined label doesn't run off
+				// across the graph.
+				//
+				// `sourceHandle` anchors at the FIRST choice's
+				// row outlet. We can only point at one row per
+				// edge; choosing the first keeps the wire close
+				// to where the choices begin in the source node.
+				// Per-choice drag-to-wire still works because the
+				// underlying <Handle> elements on every row are
+				// always present, regardless of which edge is
+				// drawn from them.
+				const first = group[0];
+				const segments = group.map(({ choiceIndex, choice }) => {
+					const pts = choice.points ?? 0;
+					return `${choiceIndex + 1}) ${truncate(choice.label, 14)}${
+						pts ? ` +${pts}` : ''
+					}`;
+				});
+				edges.push({
+					id: `${sceneId}->${target}#merged`,
+					source: sceneId,
+					sourceHandle: `c-${first.choiceIndex}`,
+					target,
+					label: segments.join('  ·  '),
+					labelBgPadding: EDGE_LABEL_BG_PADDING,
+					labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,
+					labelStyle: EDGE_LABEL_STYLE,
+					labelBgStyle: EDGE_LABEL_BG_STYLE,
+					style,
+					markerEnd: ARROW_MARKER
+				});
+			}
+		}
 	}
 
 	// Synthetic finish node, only added if at least one choice
