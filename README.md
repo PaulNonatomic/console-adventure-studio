@@ -1,19 +1,23 @@
-# console-adventure-studio
+<div align="center">
 
-> Visual editor + visualiser for [`console-adventure`](https://github.com/PaulNonatomic/console-adventure) narratives. Branching choice-based scripts, rendered as an interactive node graph.
+### A visual editor for [`console-adventure`](https://github.com/PaulNonatomic/console-adventure) narratives.
 
-[![CI](https://github.com/PaulNonatomic/console-adventure-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/PaulNonatomic/console-adventure-studio/actions/workflows/ci.yml)
-[![Deploy](https://github.com/PaulNonatomic/console-adventure-studio/actions/workflows/deploy.yml/badge.svg)](https://paulnonatomic.github.io/console-adventure-studio/)
-[![license: MIT](https://img.shields.io/badge/license-MIT-c7f441.svg)](./LICENSE)
+Branching choice-based scripts, rendered as an interactive node graph. Author and edit a text adventure visually, playtest it inside the studio with the real `console-adventure` engine, then export the result as JSON your site can feed straight into `createAdventureFromJson`.
 
 **Live: <https://paulnonatomic.github.io/console-adventure-studio/>**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PullRequests](https://img.shields.io/badge/PRs-welcome-blueviolet)](http://makeapullrequest.com)
+[![Releases](https://img.shields.io/github/v/release/PaulNonatomic/console-adventure-studio)](https://github.com/PaulNonatomic/console-adventure-studio/releases)
+[![CI](https://github.com/PaulNonatomic/console-adventure-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/PaulNonatomic/console-adventure-studio/actions/workflows/ci.yml)
+[![Deploy](https://github.com/PaulNonatomic/console-adventure-studio/actions/workflows/deploy.yml/badge.svg)](https://paulnonatomic.github.io/console-adventure-studio/)
+
+</div>
 
 ## Support
 If you like my work then please consider showing your support for console-adventure-studio by giving the repo a star or buying me a brew
 <br><br>
 <a href="https://www.buymeacoffee.com/nonatomic" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
-
----
 
 ## What this is
 
