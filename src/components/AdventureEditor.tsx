@@ -15,6 +15,7 @@ import {
 	colorForTierSlot
 } from '../lib/theme';
 import { Input, NumberInput, Textarea, Select, Button } from './Inputs';
+import { downloadAdventure, copyAdventureToClipboard } from '../lib/exportAdventure';
 import {
 	setStart,
 	addScene,
@@ -245,34 +246,15 @@ function StatRow({
 	);
 }
 
-const SCHEMA_URL =
-	'https://raw.githubusercontent.com/PaulNonatomic/console-adventure/main/adventure.schema.json';
-
-/**
- * Serialise an adventure to its canonical wire format —
- * `$schema` URL prepended so the downloaded file is self-
- * documenting in any editor / IDE.
- */
-function toWireFormat(json: AdventureJson): string {
-	return JSON.stringify({ $schema: SCHEMA_URL, ...json }, null, 2);
-}
-
+// Wire-format serialisation + browser download + clipboard
+// copy live in `lib/exportAdventure.ts` — single source of
+// truth so the same `$schema` URL is used by both this panel
+// and the ship dialog. The two functions below stay as
+// no-args wrappers for the existing button onClick handlers.
 function exportJson(json: AdventureJson) {
-	const blob = new Blob([toWireFormat(json)], { type: 'application/json' });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = 'adventure.json';
-	document.body.appendChild(a);
-	a.click();
-	a.remove();
-	URL.revokeObjectURL(url);
+	downloadAdventure(json);
 }
 
-async function copyJson(json: AdventureJson) {
-	try {
-		await navigator.clipboard.writeText(toWireFormat(json));
-	} catch {
-		// Clipboard API may be unavailable in some contexts.
-	}
+function copyJson(json: AdventureJson) {
+	void copyAdventureToClipboard(json);
 }

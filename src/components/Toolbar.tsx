@@ -20,6 +20,7 @@ interface Props {
 	onNewAdventure: () => void;
 	onSave: () => void;
 	onOpenLoadDialog: () => void;
+	onOpenShipDialog: () => void;
 	onError: (message: string) => void;
 	saveAvailable: boolean;
 }
@@ -30,6 +31,7 @@ export function Toolbar({
 	onNewAdventure,
 	onSave,
 	onOpenLoadDialog,
+	onOpenShipDialog,
 	onError,
 	saveAvailable
 }: Props) {
@@ -102,6 +104,8 @@ export function Toolbar({
 				<TbButton label="paste JSON" onClick={handlePaste} />
 				<TbButton label="upload" onClick={() => fileInputRef.current?.click()} />
 				<TbButton label="from URL" onClick={handleFetchUrl} />
+				<TbDivider />
+				<TbButton label="ship" onClick={onOpenShipDialog} variant="primary" />
 			</div>
 		</header>
 	);

@@ -78,6 +78,7 @@ import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
+import { ShipDialog } from './components/ShipDialog';
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
 
 /**
@@ -143,6 +144,7 @@ export default function App() {
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [showLoadDialog, setShowLoadDialog] = useState(false);
+	const [showShipDialog, setShowShipDialog] = useState(false);
 	const [currentSaveName, setCurrentSaveName] = useState<string | null>(null);
 	// Boot overlay: shown once per browser unless the user
 	// ticks "don't show on boot" inside it. The persisted skip
@@ -309,6 +311,28 @@ export default function App() {
 		setCurrentSaveName(null);
 	}
 
+	/**
+	 * Programmatic scene selection — closes any open modal AND
+	 * highlights the named scene on the graph. Used by the
+	 * Ship dialog's "jump to it" links on failing validation
+	 * rows, and (eventually) by Move 02's validation surfaces.
+	 *
+	 * Updates both `selectedScene` (controls the right panel)
+	 * AND the React Flow node `selected` flag (drives the
+	 * visual highlight) — they're separate state in controlled
+	 * mode and have to be synced manually.
+	 */
+	const handleJumpToScene = useCallback(
+		(sceneId: string) => {
+			setShowShipDialog(false);
+			setSelectedScene(sceneId);
+			setRfNodes((prev) =>
+				prev.map((n) => ({ ...n, selected: n.id === sceneId }))
+			);
+		},
+		[setRfNodes]
+	);
+
 	function saveCurrent() {
 		// Prefill with the existing save name (if any) or the
 		// adventure's start scene id. window.prompt is good
@@ -359,9 +383,18 @@ export default function App() {
 				onNewAdventure={newAdventure}
 				onSave={saveCurrent}
 				onOpenLoadDialog={() => setShowLoadDialog(true)}
+				onOpenShipDialog={() => setShowShipDialog(true)}
 				saveAvailable={saveAvailable}
 				onError={setError}
 			/>
+
+			{showShipDialog && (
+				<ShipDialog
+					json={json}
+					onClose={() => setShowShipDialog(false)}
+					onJumpToScene={handleJumpToScene}
+				/>
+			)}
 
 			{showLoadDialog && (
 				<LoadDialog
