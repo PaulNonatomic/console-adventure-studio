@@ -72,13 +72,56 @@ import { RightPanel } from './components/RightPanel';
 import { SceneNode } from './components/SceneNode';
 import { FinishNode } from './components/FinishNode';
 import { LoadDialog } from './components/LoadDialog';
-import { buildGraph, FINISH_NODE_ID } from './lib/graph';
+import { buildGraph, FINISH_NODE_ID, ARROW_MARKER_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
 import { computeMaxScore } from 'console-adventure';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
+
+/**
+ * Custom arrow marker that terminates the edge line at the
+ * base of the triangle rather than the centre. Built-in
+ * `arrowclosed` puts `refX` at the centre of the marker, so
+ * the edge line draws all the way through the interior of the
+ * arrowhead and visually crosses it — looks like the line is
+ * stabbing the arrow rather than terminating in it. Custom
+ * marker with `refX="1"` (a hair inside the base so the line
+ * meets the triangle cleanly without a 1px gap).
+ *
+ * Rendered as a zero-size SVG sibling of the React Flow root
+ * — its only job is to provide `<defs>` that other SVGs in
+ * the document can reference by `url(#id)`.
+ */
+function MarkerDefs() {
+	return (
+		<svg
+			aria-hidden="true"
+			style={{
+				position: 'absolute',
+				width: 0,
+				height: 0,
+				overflow: 'hidden',
+				pointerEvents: 'none'
+			}}
+		>
+			<defs>
+				<marker
+					id={ARROW_MARKER_ID}
+					viewBox="0 0 10 10"
+					refX="1"
+					refY="5"
+					markerWidth="12"
+					markerHeight="12"
+					orient="auto"
+				>
+					<path d="M 0 0 L 10 5 L 0 10 z" fill={AMBER} />
+				</marker>
+			</defs>
+		</svg>
+	);
+}
 import type { AdventureJson } from 'console-adventure';
 
 const nodeTypes = { scene: SceneNode, finish: FinishNode };
@@ -321,6 +364,8 @@ export default function App() {
 					</button>
 				</div>
 			)}
+
+			<MarkerDefs />
 
 			<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 				<div style={{ flex: 1, position: 'relative' }}>

@@ -39,12 +39,18 @@ const EDGE_LABEL_BG_STYLE = {
 
 const EDGE_STROKE_STYLE = { stroke: AMBER, strokeWidth: 1.5 } as const;
 
-const ARROW_MARKER = {
-	type: 'arrowclosed',
-	color: AMBER,
-	width: 18,
-	height: 18
-} as const;
+/**
+ * Custom arrow marker referenced by URL. React Flow's built-in
+ * `arrowclosed` marker has `refX` at the centre of the triangle,
+ * so the line draws all the way to the centre and visually
+ * passes through the arrowhead's interior. Our marker sits in
+ * the SVG defs block in `App.tsx` with `refX="1"` — the line
+ * terminates just inside the triangle base instead, no
+ * crossover.
+ */
+const ARROW_MARKER = 'url(#cas-arrow-base)';
+
+export const ARROW_MARKER_ID = 'cas-arrow-base';
 
 const EDGE_LABEL_BG_PADDING: [number, number] = [6, 4];
 const EDGE_LABEL_BG_RADIUS = 4;
@@ -107,7 +113,7 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 				labelStyle: EDGE_LABEL_STYLE,
 				labelBgStyle: EDGE_LABEL_BG_STYLE,
 				style: EDGE_STROKE_STYLE,
-				markerEnd: ARROW_MARKER as Edge['markerEnd']
+				markerEnd: ARROW_MARKER
 			});
 		});
 	}
