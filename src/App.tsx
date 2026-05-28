@@ -62,6 +62,24 @@ export default function App() {
 		};
 	}, [json, maxScore]);
 
+	// Nodes to focus on at first render: the start scene plus
+	// its direct successors. `fitView` previously fitted the
+	// whole graph, which at minZoom 1.0 pushed the entrance off
+	// the top of the viewport — the user landed looking at the
+	// middle of the script instead of the entry point. Focusing
+	// on the start + first-layer successors guarantees the
+	// entry node is visible with one layer of context, and the
+	// user can pan / zoom out to see the rest.
+	const focusNodeIds = useMemo(() => {
+		const successors =
+			json.scenes[json.start]?.choices
+				.map((c) => c.next)
+				.filter((n): n is string => n !== null) ?? [];
+		// De-duplicate — two choices can both point to the same
+		// next scene; we want each id at most once.
+		return Array.from(new Set([json.start, ...successors]));
+	}, [json]);
+
 	const handleSelectionChange = useCallback(
 		(params: OnSelectionChangeParams) => {
 			const node: Node | undefined = params.nodes[0];
@@ -153,8 +171,18 @@ export default function App() {
 						fitView
 						// Push fitView's auto-fit floor up further per
 						// playtest feedback — at <1.0x the choice labels
-						// in node bodies become hard to read.
-						fitViewOptions={{ padding: 0.08, minZoom: 1, maxZoom: 1.6 }}
+						// in node bodies become hard to read. The `nodes`
+						// option restricts fitView to the start scene +
+						// its direct successors, so the entry point is
+						// always visible at default zoom rather than
+						// being pushed off the top by a "fit everything"
+						// auto-fit.
+						fitViewOptions={{
+							nodes: focusNodeIds.map((id) => ({ id })),
+							padding: 0.15,
+							minZoom: 1,
+							maxZoom: 1.6
+						}}
 						minZoom={0.2}
 						maxZoom={2}
 						proOptions={{ hideAttribution: true }}
@@ -166,7 +194,11 @@ export default function App() {
 							gap={20}
 							size={1}
 						/>
+						{/* Top-right: out of the way of the hint text
+						    in the bottom-left and the MiniMap in the
+						    bottom-right. */}
 						<Controls
+							position="top-right"
 							style={{ background: PANEL, border: `1px solid ${PANEL_BORDER}` }}
 						/>
 						<MiniMap
