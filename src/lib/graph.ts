@@ -18,6 +18,7 @@ import type { Node, Edge } from '@xyflow/react';
 import type { AdventureJson, Scene } from 'console-adventure';
 import { AMBER, CYAN, PANEL_BORDER, VOID } from './theme';
 import { validate } from './validate';
+import type { FlowDirection } from './flowDirection';
 
 // Static edge-styling constants, lifted to module scope so we
 // don't allocate fresh objects per edge on every build of the
@@ -106,6 +107,14 @@ export interface SceneNodeData extends Record<string, unknown> {
 	 */
 	isLive: boolean;
 	isVisited: boolean;
+	/**
+	 * Current global flow direction. Threaded onto every scene
+	 * node so SceneNode can pick the correct target-handle edge
+	 * (Left when horizontal, Top when vertical). Denorm but
+	 * cheap — direction changes are rare and rebuild the whole
+	 * graph anyway.
+	 */
+	flowDirection: FlowDirection;
 }
 
 /**
@@ -124,6 +133,7 @@ export interface PlayHighlight {
 export interface FinishNodeData extends Record<string, unknown> {
 	tiers?: Array<{ minScore: number; label: string; color?: string }>;
 	maxScore: number;
+	flowDirection: FlowDirection;
 }
 
 export const FINISH_NODE_ID = '__finish__';
@@ -131,7 +141,8 @@ export const FINISH_NODE_ID = '__finish__';
 export function buildGraph(
 	json: AdventureJson,
 	maxScore: number,
-	play?: PlayHighlight
+	play?: PlayHighlight,
+	flowDirection: FlowDirection = 'horizontal'
 ): {
 	nodes: Node[];
 	edges: Edge[];
@@ -168,7 +179,8 @@ export function buildGraph(
 				hasMissingTarget: missingTargetScenes.has(sceneId),
 				inDegree: v.inDegree[sceneId] ?? 0,
 				isLive: sceneId === liveSceneId,
-				isVisited: visitedSet.has(sceneId) && sceneId !== liveSceneId
+				isVisited: visitedSet.has(sceneId) && sceneId !== liveSceneId,
+				flowDirection
 			} satisfies SceneNodeData
 		});
 
@@ -289,7 +301,7 @@ export function buildGraph(
 			id: FINISH_NODE_ID,
 			type: 'finish',
 			position: { x: 0, y: 0 },
-			data: { tiers: json.tiers, maxScore } satisfies FinishNodeData
+			data: { tiers: json.tiers, maxScore, flowDirection } satisfies FinishNodeData
 		});
 	}
 

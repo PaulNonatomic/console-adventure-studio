@@ -48,11 +48,18 @@ import {
 } from '../lib/edit';
 import { layoutGraph } from '../lib/layout';
 import { buildGraph, FINISH_NODE_ID } from '../lib/graph';
+import type { FlowDirection } from '../lib/flowDirection';
 
 interface Props {
 	json: AdventureJson;
 	maxScore: number;
 	selectedSceneId: string | null;
+	/**
+	 * Match the canvas's current flow direction so the minimap
+	 * thumbnail shows the same orientation the author sees on
+	 * the graph view.
+	 */
+	flowDirection: FlowDirection;
 	onJsonChange: (next: AdventureJson, opts?: { remount?: boolean }) => void;
 	onSelectScene: (id: string | null) => void;
 	onPlayFromHere: (sceneId: string) => void;
@@ -73,6 +80,7 @@ export function ScriptView({
 	json,
 	maxScore,
 	selectedSceneId,
+	flowDirection,
 	onJsonChange,
 	onSelectScene,
 	onPlayFromHere
@@ -175,6 +183,7 @@ export function ScriptView({
 				<div style={railSectionLabel}>MAP</div>
 				<MiniMap
 					json={json}
+					flowDirection={flowDirection}
 					selectedSceneId={selectedSceneId}
 					onSelectScene={scrollToScene}
 				/>
@@ -317,18 +326,20 @@ function OutlineRow({
  */
 function MiniMap({
 	json,
+	flowDirection,
 	selectedSceneId,
 	onSelectScene
 }: {
 	json: AdventureJson;
+	flowDirection: FlowDirection;
 	selectedSceneId: string | null;
 	onSelectScene: (id: string) => void;
 }) {
 	const layout = useMemo(() => {
-		const built = buildGraph(json, 0);
-		const positioned = layoutGraph(built.nodes, built.edges, json.start);
+		const built = buildGraph(json, 0, undefined, flowDirection);
+		const positioned = layoutGraph(built.nodes, built.edges, json.start, flowDirection);
 		return { nodes: positioned, edges: built.edges };
-	}, [json]);
+	}, [json, flowDirection]);
 
 	// Compute bounds so we can normalise into a 200x200 viewport.
 	const bounds = useMemo(() => {

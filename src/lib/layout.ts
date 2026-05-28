@@ -1,26 +1,39 @@
 /**
- * Layered top-down auto-layout. Sceneing by BFS depth from the
- * start node, then spreading each layer horizontally.
+ * Layered auto-layout. Picks layers by BFS depth from the start
+ * node, then spreads each layer along the cross-axis.
  *
- * This is intentionally a hand-rolled algorithm (rather than
- * pulling in dagre or elkjs) — the adventures we render are
- * small (~10 scenes) and the layered look matches the SVG
- * diagram in docs/foundry-narrative.svg. Bigger / more
- * complex graphs would benefit from a proper layout engine.
+ * Two flow directions are supported:
+ *   - 'horizontal' (default): layers progress left → right,
+ *     nodes within a layer stack top → bottom. Pairs cleanly
+ *     with per-row source handles on the right edge of each
+ *     SceneNode and a target on the left.
+ *   - 'vertical': layers progress top → bottom (the legacy
+ *     setup), nodes within a layer spread left → right.
+ *
+ * Intentionally hand-rolled rather than pulling in dagre / elkjs
+ * — the adventures we render are small (~10 scenes) and the
+ * layered look matches the SVG diagram in
+ * docs/foundry-narrative.svg. Bigger / more complex graphs would
+ * benefit from a proper layout engine.
  */
 import type { Node, Edge } from '@xyflow/react';
 import { FINISH_NODE_ID } from './graph.js';
+import type { FlowDirection } from './flowDirection.js';
 
 const NODE_WIDTH = 320;
+const NODE_HEIGHT_ESTIMATE = 200; // rough avg — varies with choice count
 const NODE_HSPACING = 80;
-const LAYER_VSPACING = 220;
+const NODE_VSPACING = 40;
+const LAYER_HSPACING = 220; // distance between layers in horizontal flow
+const LAYER_VSPACING = 220; // distance between layers in vertical flow
 const TOP_PADDING = 60;
 const LEFT_PADDING = 60;
 
 export function layoutGraph(
 	nodes: Node[],
 	edges: Edge[],
-	startId: string
+	startId: string,
+	direction: FlowDirection = 'horizontal'
 ): Node[] {
 	// Build adjacency for BFS.
 	const successors = new Map<string, Set<string>>();
@@ -30,8 +43,9 @@ export function layoutGraph(
 	}
 
 	// BFS depth from start. Nodes unreachable from start get a
-	// large synthetic depth so they're rendered at the bottom in
-	// their own row — visible but clearly disconnected.
+	// large synthetic depth so they're rendered at the end of
+	// the flow in their own row — visible but clearly
+	// disconnected.
 	const depth = new Map<string, number>();
 	depth.set(startId, 0);
 	const queue: string[] = [startId];
@@ -47,7 +61,7 @@ export function layoutGraph(
 	}
 
 	// Anything that didn't get a depth (orphan scene) goes one
-	// layer below the deepest assigned layer.
+	// layer beyond the deepest assigned layer.
 	const maxAssignedDepth = Math.max(...depth.values(), 0);
 	for (const node of nodes) {
 		if (!depth.has(node.id)) {
@@ -64,12 +78,16 @@ export function layoutGraph(
 	}
 
 	// Order the nodes within each layer to minimise edge crossings.
-	// Simple heuristic: sort by the average x-position of their
+	// Simple heuristic: sort by the mean cross-axis position of
 	// predecessors at the previous layer. For the start row,
-	// alphabetical. We pass twice — once forward, once forward
-	// again — which is enough for the small adventures we render.
-	const xByNode = new Map<string, number>();
+	// alphabetical. Two passes — enough for the small adventures
+	// we render.
+	const crossByNode = new Map<string, number>(); // cross-axis position (y for horizontal, x for vertical)
 	const sortedDepths = [...byDepth.keys()].sort((a, b) => a - b);
+
+	const nodeSize = direction === 'horizontal' ? NODE_HEIGHT_ESTIMATE : NODE_WIDTH;
+	const intraSpacing = direction === 'horizontal' ? NODE_VSPACING : NODE_HSPACING;
+	const paddingCross = direction === 'horizontal' ? TOP_PADDING : LEFT_PADDING;
 
 	for (let pass = 0; pass < 2; pass++) {
 		for (const d of sortedDepths) {
@@ -77,13 +95,12 @@ export function layoutGraph(
 			if (d === 0) {
 				ids.sort();
 			} else {
-				// For each node, find predecessor average x.
 				const predMean = new Map<string, number>();
 				for (const id of ids) {
 					const preds: number[] = [];
 					for (const e of edges) {
-						if (e.target === id && xByNode.has(e.source)) {
-							preds.push(xByNode.get(e.source)!);
+						if (e.target === id && crossByNode.has(e.source)) {
+							preds.push(crossByNode.get(e.source)!);
 						}
 					}
 					predMean.set(
@@ -93,27 +110,35 @@ export function layoutGraph(
 							: 0
 					);
 				}
-				ids.sort((a, b) => (predMean.get(a)! - predMean.get(b)!));
+				ids.sort((a, b) => predMean.get(a)! - predMean.get(b)!);
 			}
 
-			// Assign x positions for this layer, centred.
-			const totalWidth = ids.length * NODE_WIDTH + (ids.length - 1) * NODE_HSPACING;
-			const layerLeft = LEFT_PADDING + Math.max(0, (0 - totalWidth) / 2);
+			// Assign cross-axis positions for this layer.
 			ids.forEach((id, i) => {
-				xByNode.set(id, layerLeft + i * (NODE_WIDTH + NODE_HSPACING));
+				crossByNode.set(id, paddingCross + i * (nodeSize + intraSpacing));
 			});
 		}
 	}
 
 	// Apply positions back to the node list. Finish node gets
-	// slightly extra vertical space so it reads as the conclusion.
+	// a touch of extra spacing so it reads as the conclusion.
 	return nodes.map((node) => {
 		const d = depth.get(node.id) ?? 0;
-		const extraGap = node.id === FINISH_NODE_ID ? 40 : 0;
+		const isFinish = node.id === FINISH_NODE_ID;
+		const extraGap = isFinish ? 40 : 0;
+		if (direction === 'horizontal') {
+			return {
+				...node,
+				position: {
+					x: LEFT_PADDING + d * (NODE_WIDTH + LAYER_HSPACING) + extraGap,
+					y: crossByNode.get(node.id) ?? 0
+				}
+			};
+		}
 		return {
 			...node,
 			position: {
-				x: xByNode.get(node.id) ?? 0,
+				x: crossByNode.get(node.id) ?? 0,
 				y: TOP_PADDING + d * LAYER_VSPACING + extraGap
 			}
 		};

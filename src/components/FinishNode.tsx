@@ -33,7 +33,11 @@ function FinishNodeImpl({ data }: NodeProps) {
 				boxShadow: `0 0 24px ${MAGENTA}22`
 			}}
 		>
-			<Handle type="target" position={Position.Top} style={{ background: MAGENTA }} />
+			<Handle
+				type="target"
+				position={d.flowDirection === 'vertical' ? Position.Top : Position.Left}
+				style={{ background: MAGENTA }}
+			/>
 
 			<div
 				style={{

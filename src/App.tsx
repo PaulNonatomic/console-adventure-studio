@@ -88,7 +88,13 @@ import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
 import { ScriptView } from './components/ScriptView';
 import { ViewToggle } from './components/ViewToggle';
+import { FlowDirectionToggle } from './components/FlowDirectionToggle';
 import { loadViewMode, saveViewMode, type ViewMode } from './lib/viewMode';
+import {
+	loadFlowDirection,
+	saveFlowDirection,
+	type FlowDirection
+} from './lib/flowDirection';
 import type { PlayState } from './components/Terminal';
 
 const EMPTY_PLAYSTATE: PlayState = {
@@ -221,6 +227,22 @@ function AppInner() {
 		saveViewMode(m);
 	}, []);
 
+	// Flow direction (horizontal / vertical). Horizontal is the
+	// default because the per-row source handles sit on the
+	// right edge of each card -- pairing them with a left-edge
+	// target on the next node gives clean wires. Vertical keeps
+	// the legacy top-down layout for authors who prefer it.
+	// Both branches structurally remount the graph (jsonVersion
+	// bump) so fitView re-frames on the new orientation.
+	const [flowDirection, setFlowDirection] = useState<FlowDirection>(() =>
+		loadFlowDirection()
+	);
+	const handleFlowDirectionChange = useCallback((d: FlowDirection) => {
+		setFlowDirection(d);
+		saveFlowDirection(d);
+		setJsonVersion((v) => v + 1);
+	}, []);
+
 	/**
 	 * "▶ play from here" — boot the playtest at a specific
 	 * scene, switch the right panel to the Play tab. The request
@@ -261,9 +283,9 @@ function AppInner() {
 	// on structural changes.
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	const initialGraph = useMemo(() => {
-		const built = buildGraph(json, maxScore);
+		const built = buildGraph(json, maxScore, undefined, flowDirection);
 		return {
-			nodes: layoutGraph(built.nodes, built.edges, json.start),
+			nodes: layoutGraph(built.nodes, built.edges, json.start, flowDirection),
 			edges: built.edges
 		};
 	}, []);
@@ -286,12 +308,17 @@ function AppInner() {
 			isFirstRenderRef.current = false;
 			return;
 		}
-		const built = buildGraph(json, maxScore, {
-			liveSceneId,
-			visited: visitedSet,
-			takenEdges: takenEdgeSet
-		});
-		const positioned = layoutGraph(built.nodes, built.edges, json.start);
+		const built = buildGraph(
+			json,
+			maxScore,
+			{
+				liveSceneId,
+				visited: visitedSet,
+				takenEdges: takenEdgeSet
+			},
+			flowDirection
+		);
+		const positioned = layoutGraph(built.nodes, built.edges, json.start, flowDirection);
 		// Carry over React Flow's `selected` flag from the
 		// previous nodes by id. Without this, every json edit
 		// (every keystroke in the heading / narration / etc.)
@@ -306,7 +333,16 @@ function AppInner() {
 			);
 		});
 		setRfEdges(built.edges);
-	}, [json, maxScore, liveSceneId, visitedSet, takenEdgeSet, setRfNodes, setRfEdges]);
+	}, [
+		json,
+		maxScore,
+		liveSceneId,
+		visitedSet,
+		takenEdgeSet,
+		flowDirection,
+		setRfNodes,
+		setRfEdges
+	]);
 
 	const focusNodeIds = useMemo(() => {
 		const successors =
@@ -424,12 +460,17 @@ function AppInner() {
 	 * than remounting and losing the selection.
 	 */
 	const handleAutoLayout = useCallback(() => {
-		const built = buildGraph(json, maxScore, {
-			liveSceneId,
-			visited: visitedSet,
-			takenEdges: takenEdgeSet
-		});
-		const positioned = layoutGraph(built.nodes, built.edges, json.start);
+		const built = buildGraph(
+			json,
+			maxScore,
+			{
+				liveSceneId,
+				visited: visitedSet,
+				takenEdges: takenEdgeSet
+			},
+			flowDirection
+		);
+		const positioned = layoutGraph(built.nodes, built.edges, json.start, flowDirection);
 		setRfNodes((prev) => {
 			const wasSelected = new Map(prev.map((n) => [n.id, !!n.selected]));
 			return positioned.map((n) =>
@@ -455,6 +496,7 @@ function AppInner() {
 		liveSceneId,
 		visitedSet,
 		takenEdgeSet,
+		flowDirection,
 		setRfNodes,
 		setRfEdges,
 		reactFlow
@@ -751,7 +793,13 @@ function AppInner() {
 					</span>{' '}
 					choices · max <span style={{ color: PHOSPHOR }}>{maxScore}</span>
 				</span>
-				<ViewToggle mode={viewMode} onChange={handleViewModeChange} />
+				<div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+					<FlowDirectionToggle
+						direction={flowDirection}
+						onChange={handleFlowDirectionChange}
+					/>
+					<ViewToggle mode={viewMode} onChange={handleViewModeChange} />
+				</div>
 			</div>
 
 			{showShipDialog && (
@@ -834,6 +882,7 @@ function AppInner() {
 						json={json}
 						maxScore={maxScore}
 						selectedSceneId={selectedScene}
+						flowDirection={flowDirection}
 						onJsonChange={handleJsonChange}
 						onSelectScene={setSelectedScene}
 						onPlayFromHere={(sceneId) => {
@@ -1011,6 +1060,7 @@ function AppInner() {
 							json={json}
 							maxScore={maxScore}
 							selectedSceneId={selectedScene}
+							flowDirection={flowDirection}
 							onJsonChange={handleJsonChange}
 							onSelectScene={setSelectedScene}
 							onPlayFromHere={(sceneId) => {

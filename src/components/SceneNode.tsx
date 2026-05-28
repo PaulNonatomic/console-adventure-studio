@@ -97,9 +97,19 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 				</div>
 			)}
 
-			{/* Inbound handle on top, outbound on bottom — matches the
-			    layered top-down auto-layout. */}
-			<Handle type="target" position={Position.Top} style={{ background: AMBER }} />
+			{/* Target handle position follows the flow direction:
+			    Left edge when horizontal (so wires enter the card
+			    from the previous layer to the left), Top when
+			    vertical (legacy layout). Per-choice source
+			    handles stay on the Right edge of each row in both
+			    modes -- they're the drag-to-wire affordance and
+			    that placement is what makes per-row addressing
+			    visible. */}
+			<Handle
+				type="target"
+				position={d.flowDirection === 'vertical' ? Position.Top : Position.Left}
+				style={{ background: AMBER }}
+			/>
 
 			{/* Top-of-card status tag — live > visited > start.
 			    Only one is shown at a time; live wins because the
