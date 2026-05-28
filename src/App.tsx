@@ -51,11 +51,13 @@ import { Toolbar } from './components/Toolbar';
 import { RightPanel } from './components/RightPanel';
 import { SceneNode } from './components/SceneNode';
 import { FinishNode } from './components/FinishNode';
+import { LoadDialog } from './components/LoadDialog';
 import { buildGraph, FINISH_NODE_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
 import { computeMaxScore } from './lib/maxScore';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE } from './lib/blank';
+import { createSave, storageAvailable } from './lib/storage';
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
 import type { AdventureJson } from 'console-adventure';
 
@@ -66,6 +68,14 @@ export default function App() {
 	const [jsonVersion, setJsonVersion] = useState(0);
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [showLoadDialog, setShowLoadDialog] = useState(false);
+	const [currentSaveName, setCurrentSaveName] = useState<string | null>(null);
+
+	// Whether localStorage is usable in this browsing context.
+	// Resolved once on first render; passed through to the
+	// toolbar so save / load fade rather than silently no-op
+	// in private browsing / storage-blocked contexts.
+	const saveAvailable = useMemo(() => storageAvailable(), []);
 
 	const [rfNodes, setRfNodes, onNodesChange] = useNodesState<Node>([]);
 	const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -142,6 +152,31 @@ export default function App() {
 		setJsonVersion((v) => v + 1);
 		setSelectedScene(null);
 		setError(null);
+		setCurrentSaveName(null);
+	}
+
+	function saveCurrent() {
+		// Prefill with the existing save name (if any) or the
+		// adventure's start scene id. window.prompt is good
+		// enough for a one-field "name this thing" interaction
+		// — no need for a dedicated modal.
+		const defaultName = currentSaveName ?? `Adventure ${new Date().toLocaleDateString()}`;
+		const name = window.prompt('Name this save:', defaultName);
+		if (!name) return;
+		const id = createSave(name.trim(), json);
+		if (id === null) {
+			setError("Couldn't save to localStorage (quota or blocked).");
+			return;
+		}
+		setCurrentSaveName(name.trim());
+	}
+
+	function loadFromStorage(loadedJson: AdventureJson, name: string) {
+		setJson(loadedJson);
+		setJsonVersion((v) => v + 1);
+		setSelectedScene(null);
+		setError(null);
+		setCurrentSaveName(name);
 	}
 
 	return (
@@ -158,8 +193,18 @@ export default function App() {
 				onLoadExample={loadExample}
 				onLoadJson={loadJson}
 				onNewAdventure={newAdventure}
+				onSave={saveCurrent}
+				onOpenLoadDialog={() => setShowLoadDialog(true)}
+				saveAvailable={saveAvailable}
 				onError={setError}
 			/>
+
+			{showLoadDialog && (
+				<LoadDialog
+					onClose={() => setShowLoadDialog(false)}
+					onLoad={loadFromStorage}
+				/>
+			)}
 
 			{error && (
 				<div

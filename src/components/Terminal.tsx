@@ -212,20 +212,57 @@ export function Terminal({ json }: Props) {
  * segment is unstyled (matches the browser's console
  * behaviour: anything before the first `%c` uses the default
  * style).
+ *
+ * Hanging indent: console-adventure prefixes every line with
+ * a literal `   ` (or `     ` for choices) for indentation. In
+ * a narrow viewport that string wraps and the continuation
+ * lands at column 0 — visually broken. So we strip the leading
+ * whitespace from the message and re-apply it as
+ * `padding-left` (in `ch` units, exact for monospace) so the
+ * first line and every wrap continuation share the same x.
  */
 function TerminalLine({ line }: { line: LogLine }) {
 	const segments = line.message.split('%c');
+
+	// Find the leading whitespace of the first non-empty segment.
+	let leadChars = 0;
+	const firstContent = segments.find((s) => s.length > 0);
+	if (firstContent) {
+		const m = firstContent.match(/^(\s*)/);
+		if (m) leadChars = m[1].length;
+	}
+
+	// Render segments, but trim the leading whitespace from the
+	// first non-empty one (we're going to apply it as padding
+	// instead).
+	let stripped = false;
+	const rendered: Array<JSX.Element | null> = segments.map((seg, i) => {
+		let s = seg;
+		if (!stripped && s.length > 0) {
+			s = s.replace(/^\s+/, '');
+			stripped = true;
+		}
+		if (s.length === 0) return null;
+		const style = i === 0 ? undefined : line.styles[i - 1];
+		return (
+			<span key={i} style={style ? cssStringToObject(style) : undefined}>
+				{s}
+			</span>
+		);
+	});
+
 	return (
-		<div style={{ whiteSpace: 'pre-wrap' }}>
-			{segments.map((seg, i) => {
-				if (i === 0) return seg ? <span key={i}>{seg}</span> : null;
-				const style = line.styles[i - 1];
-				return (
-					<span key={i} style={cssStringToObject(style)}>
-						{seg}
-					</span>
-				);
-			})}
+		<div
+			style={{
+				// `ch` = the width of a "0" glyph; for monospace it's
+				// exactly one character cell, so paddingLeft tracks
+				// the original leading-space width pixel-perfectly.
+				paddingLeft: `${leadChars}ch`,
+				whiteSpace: 'pre-wrap',
+				wordBreak: 'break-word'
+			}}
+		>
+			{rendered}
 		</div>
 	);
 }

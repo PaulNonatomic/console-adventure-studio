@@ -2,6 +2,10 @@
  * The right-hand panel — a small tab system that hosts both
  * the inspector/editor and the in-studio playtest terminal.
  *
+ * The panel is drag-resizable from its left edge. Width
+ * persists to localStorage so the user's preferred size
+ * survives a page refresh.
+ *
  * Both tabs are rendered at all times (just hidden via CSS)
  * so the terminal's adventure state survives a tab switch.
  */
@@ -9,6 +13,7 @@ import { useState, type ReactNode } from 'react';
 import { Terminal } from './Terminal';
 import { ScenePanel } from './ScenePanel';
 import { PANEL, PANEL_BORDER, PHOSPHOR, DIM, AMBER } from '../lib/theme';
+import { useResizable } from '../lib/useResizable';
 import type { AdventureJson } from 'console-adventure';
 
 type Tab = 'inspect' | 'play';
@@ -29,20 +34,53 @@ export function RightPanel({
 	onSelectScene
 }: Props) {
 	const [tab, setTab] = useState<Tab>('inspect');
+	const { width, dragging, onMouseDown } = useResizable({
+		initial: 420,
+		min: 320,
+		max: 900
+	});
 
 	return (
 		<aside
 			style={{
-				width: 400,
+				width,
+				flexShrink: 0,
 				background: PANEL,
 				borderLeft: `1px solid ${PANEL_BORDER}`,
 				color: '#eef0f5',
 				fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
 				display: 'flex',
 				flexDirection: 'column',
-				overflow: 'hidden'
+				overflow: 'hidden',
+				position: 'relative'
 			}}
 		>
+			{/* Drag handle on the very left edge of the panel. The
+			    handle straddles the border (left: -4) so the user
+			    has a 6px-wide hit area to grab. */}
+			<div
+				onMouseDown={onMouseDown}
+				style={{
+					position: 'absolute',
+					top: 0,
+					bottom: 0,
+					left: -4,
+					width: 8,
+					cursor: 'col-resize',
+					background: dragging ? AMBER : 'transparent',
+					transition: dragging ? 'none' : 'background 120ms',
+					zIndex: 20
+				}}
+				onMouseEnter={(e) => {
+					if (!dragging) e.currentTarget.style.background = `${AMBER}55`;
+				}}
+				onMouseLeave={(e) => {
+					if (!dragging) e.currentTarget.style.background = 'transparent';
+				}}
+				aria-label="resize panel"
+				role="separator"
+			/>
+
 			<TabBar active={tab} onChange={setTab} />
 
 			<TabContent visible={tab === 'inspect'}>
@@ -77,7 +115,11 @@ function TabBar({
 				background: PANEL
 			}}
 		>
-			<TabButton label="inspect" active={active === 'inspect'} onClick={() => onChange('inspect')} />
+			<TabButton
+				label="inspect"
+				active={active === 'inspect'}
+				onClick={() => onChange('inspect')}
+			/>
 			<TabButton label="play" active={active === 'play'} onClick={() => onChange('play')} />
 		</div>
 	);

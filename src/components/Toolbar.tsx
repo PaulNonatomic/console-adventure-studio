@@ -14,14 +14,20 @@ interface Props {
 	onLoadExample: () => void;
 	onLoadJson: (json: unknown) => void;
 	onNewAdventure: () => void;
+	onSave: () => void;
+	onOpenLoadDialog: () => void;
 	onError: (message: string) => void;
+	saveAvailable: boolean;
 }
 
 export function Toolbar({
 	onLoadExample,
 	onLoadJson,
 	onNewAdventure,
-	onError
+	onSave,
+	onOpenLoadDialog,
+	onError,
+	saveAvailable
 }: Props) {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -109,6 +115,9 @@ export function Toolbar({
 					}}
 				/>
 				<TbButton label="new" onClick={onNewAdventure} variant="primary" />
+				<TbButton label="save" onClick={onSave} disabled={!saveAvailable} />
+				<TbButton label="load" onClick={onOpenLoadDialog} disabled={!saveAvailable} />
+				<TbDivider />
 				<TbButton label="example" onClick={onLoadExample} />
 				<TbButton label="paste JSON" onClick={handlePaste} />
 				<TbButton label="upload" onClick={() => fileInputRef.current?.click()} />
@@ -121,39 +130,58 @@ export function Toolbar({
 function TbButton({
 	label,
 	onClick,
-	variant = 'normal'
+	variant = 'normal',
+	disabled = false
 }: {
 	label: string;
 	onClick: () => void;
 	variant?: 'normal' | 'primary';
+	disabled?: boolean;
 }) {
-	const fg = variant === 'primary' ? PHOSPHOR : AMBER;
+	const fg = disabled ? DIM : variant === 'primary' ? PHOSPHOR : AMBER;
 	return (
 		<button
-			onClick={onClick}
+			onClick={disabled ? undefined : onClick}
+			disabled={disabled}
 			style={{
 				background: 'transparent',
 				color: fg,
-				border: `1px solid ${variant === 'primary' ? fg : PANEL_BORDER}`,
+				border: `1px solid ${variant === 'primary' && !disabled ? fg : PANEL_BORDER}`,
 				borderRadius: 5,
 				padding: '5px 11px',
 				fontFamily: 'inherit',
 				fontSize: 11,
-				cursor: 'pointer',
+				cursor: disabled ? 'not-allowed' : 'pointer',
+				opacity: disabled ? 0.5 : 1,
 				transition: 'border-color 120ms, color 120ms, background 120ms'
 			}}
 			onMouseEnter={(e) => {
+				if (disabled) return;
 				e.currentTarget.style.borderColor = fg;
 				e.currentTarget.style.color = TEXT;
 				e.currentTarget.style.background = `${fg}11`;
 			}}
 			onMouseLeave={(e) => {
-				e.currentTarget.style.borderColor = variant === 'primary' ? fg : PANEL_BORDER;
+				if (disabled) return;
+				e.currentTarget.style.borderColor =
+					variant === 'primary' ? fg : PANEL_BORDER;
 				e.currentTarget.style.color = fg;
 				e.currentTarget.style.background = 'transparent';
 			}}
 		>
 			{label}
 		</button>
+	);
+}
+
+function TbDivider() {
+	return (
+		<div
+			style={{
+				width: 1,
+				background: PANEL_BORDER,
+				margin: '4px 4px'
+			}}
+		/>
 	);
 }
