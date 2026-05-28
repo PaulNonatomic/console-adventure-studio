@@ -6,7 +6,14 @@
  * the whole JSON).
  */
 import type { AdventureJson } from 'console-adventure';
-import { PHOSPHOR, DIM, TEXT, PANEL_BORDER } from '../lib/theme';
+import {
+	PHOSPHOR,
+	DIM,
+	TEXT,
+	PANEL_BORDER,
+	THEME_COLOR_SLOTS,
+	colorForTierSlot
+} from '../lib/theme';
 import { Input, NumberInput, Textarea, Select, Button } from './Inputs';
 import {
 	setStart,
@@ -17,7 +24,6 @@ import {
 	toggleShare,
 	updateShare
 } from '../lib/edit';
-import { computeMaxScore } from '../lib/maxScore';
 
 interface Props {
 	json: AdventureJson;
@@ -35,17 +41,21 @@ const sectionLabel = {
 	marginTop: 18
 } as const;
 
-const tierColorOptions: Array<{
-	value: 'primary' | 'accent' | 'danger' | 'info' | 'text' | 'dim';
-	label: string;
-}> = [
-	{ value: 'primary', label: 'primary (lime)' },
-	{ value: 'accent', label: 'accent (amber)' },
-	{ value: 'danger', label: 'danger (magenta)' },
-	{ value: 'info', label: 'info (cyan)' },
-	{ value: 'text', label: 'text (off-white)' },
-	{ value: 'dim', label: 'dim (grey)' }
-];
+// Derived from console-shell's `ThemeColor` slot list. Adding a
+// new slot in the upstream type automatically lights it up as
+// an option here without any change to this file.
+const SLOT_HINTS: Record<string, string> = {
+	primary: 'lime',
+	accent: 'amber',
+	danger: 'magenta',
+	info: 'cyan',
+	text: 'off-white',
+	dim: 'grey'
+};
+const tierColorOptions = THEME_COLOR_SLOTS.map((slot) => ({
+	value: slot,
+	label: `${slot} (${SLOT_HINTS[slot] ?? colorForTierSlot(slot)})`
+}));
 
 const intentOptions: Array<{ value: string; label: string }> = [
 	{ value: 'x', label: 'X (twitter)' },
@@ -204,8 +214,8 @@ export function AdventureEditor({ json, maxScore, onJsonChange, onSelectScene }:
 			</div>
 
 			<div style={{ marginTop: 8, color: DIM, fontSize: 9, lineHeight: 1.5 }}>
-				DFS max-score is live ({computeMaxScore(json)} pts). All edits update the
-				graph, the playtest, and this panel in real time.
+				DFS max-score is live ({maxScore} pts). All edits update the graph,
+				the playtest, and this panel in real time.
 			</div>
 		</>
 	);
@@ -235,18 +245,20 @@ function StatRow({
 	);
 }
 
+const SCHEMA_URL =
+	'https://raw.githubusercontent.com/PaulNonatomic/console-adventure/main/adventure.schema.json';
+
+/**
+ * Serialise an adventure to its canonical wire format —
+ * `$schema` URL prepended so the downloaded file is self-
+ * documenting in any editor / IDE.
+ */
+function toWireFormat(json: AdventureJson): string {
+	return JSON.stringify({ $schema: SCHEMA_URL, ...json }, null, 2);
+}
+
 function exportJson(json: AdventureJson) {
-	// Strip an optional in-memory $schema for clean output, then
-	// re-add it pointing at the canonical schema URL so the
-	// downloaded file is self-documenting.
-	const out = {
-		$schema:
-			'https://raw.githubusercontent.com/PaulNonatomic/console-adventure/main/adventure.schema.json',
-		...json
-	};
-	const blob = new Blob([JSON.stringify(out, null, 2)], {
-		type: 'application/json'
-	});
+	const blob = new Blob([toWireFormat(json)], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
 	a.href = url;
@@ -258,13 +270,8 @@ function exportJson(json: AdventureJson) {
 }
 
 async function copyJson(json: AdventureJson) {
-	const out = {
-		$schema:
-			'https://raw.githubusercontent.com/PaulNonatomic/console-adventure/main/adventure.schema.json',
-		...json
-	};
 	try {
-		await navigator.clipboard.writeText(JSON.stringify(out, null, 2));
+		await navigator.clipboard.writeText(toWireFormat(json));
 	} catch {
 		// Clipboard API may be unavailable in some contexts.
 	}

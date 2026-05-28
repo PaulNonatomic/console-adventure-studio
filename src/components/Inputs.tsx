@@ -7,7 +7,7 @@
  * only place to touch when adjusting the input look.
  */
 import type { CSSProperties, ChangeEvent, ReactNode } from 'react';
-import { PHOSPHOR, AMBER, TEXT, DIM, PANEL_BORDER, VOID } from '../lib/theme';
+import { PHOSPHOR, AMBER, MAGENTA, TEXT, DIM, PANEL_BORDER, VOID } from '../lib/theme';
 
 const inputBase: CSSProperties = {
 	width: '100%',
@@ -37,7 +37,6 @@ interface InputProps {
 	value: string;
 	onChange: (next: string) => void;
 	placeholder?: string;
-	monospace?: boolean;
 }
 
 export function Input({ label, value, onChange, placeholder }: InputProps) {
@@ -171,7 +170,7 @@ export function Button({ label, onClick, color = 'accent', small = false }: Butt
 		color === 'primary'
 			? PHOSPHOR
 			: color === 'danger'
-				? '#FF388F'
+				? MAGENTA
 				: color === 'dim'
 					? DIM
 					: AMBER;

@@ -8,7 +8,6 @@
  */
 import { useRef } from 'react';
 import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, DIM, TEXT } from '../lib/theme';
-// PHOSPHOR is used by the "new" toolbar button (variant=primary).
 
 interface Props {
 	onLoadExample: () => void;

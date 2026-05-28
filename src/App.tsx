@@ -54,7 +54,7 @@ import { FinishNode } from './components/FinishNode';
 import { LoadDialog } from './components/LoadDialog';
 import { buildGraph, FINISH_NODE_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
-import { computeMaxScore } from './lib/maxScore';
+import { computeMaxScore } from 'console-adventure';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';

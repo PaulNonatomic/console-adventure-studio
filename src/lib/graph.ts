@@ -16,6 +16,38 @@
  */
 import type { Node, Edge } from '@xyflow/react';
 import type { AdventureJson } from 'console-adventure';
+import { AMBER, PANEL_BORDER, VOID } from './theme';
+
+// Static edge-styling constants, lifted to module scope so we
+// don't allocate fresh objects per edge on every build of the
+// graph. React Flow keeps references; lifting them here both
+// trims allocations and gives a single place to tune edge
+// appearance.
+const EDGE_LABEL_STYLE = {
+	fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
+	fontSize: 10,
+	fill: AMBER,
+	fontWeight: 600
+} as const;
+
+const EDGE_LABEL_BG_STYLE = {
+	fill: VOID,
+	fillOpacity: 0.85,
+	stroke: PANEL_BORDER,
+	strokeWidth: 1
+} as const;
+
+const EDGE_STROKE_STYLE = { stroke: AMBER, strokeWidth: 1.5 } as const;
+
+const ARROW_MARKER = {
+	type: 'arrowclosed',
+	color: AMBER,
+	width: 18,
+	height: 18
+} as const;
+
+const EDGE_LABEL_BG_PADDING: [number, number] = [6, 4];
+const EDGE_LABEL_BG_RADIUS = 4;
 
 export interface SceneNodeData extends Record<string, unknown> {
 	sceneId: string;
@@ -70,23 +102,12 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 				source: sceneId,
 				target,
 				label: `${i + 1}) ${truncate(choice.label, 28)}${points ? `  +${points}` : ''}`,
-				labelBgPadding: [6, 4],
-				labelBgBorderRadius: 4,
-				labelStyle: {
-					fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
-					fontSize: 10,
-					fill: '#F5A623',
-					fontWeight: 600
-				},
-				labelBgStyle: {
-					fill: '#0A0A0F',
-					fillOpacity: 0.85,
-					stroke: '#252535',
-					strokeWidth: 1
-				},
-				style: { stroke: '#F5A623', strokeWidth: 1.5 },
-				// React Flow's default arrow marker:
-				markerEnd: { type: 'arrowclosed', color: '#F5A623', width: 18, height: 18 } as Edge['markerEnd']
+				labelBgPadding: EDGE_LABEL_BG_PADDING,
+				labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,
+				labelStyle: EDGE_LABEL_STYLE,
+				labelBgStyle: EDGE_LABEL_BG_STYLE,
+				style: EDGE_STROKE_STYLE,
+				markerEnd: ARROW_MARKER as Edge['markerEnd']
 			});
 		});
 	}

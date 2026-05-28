@@ -11,6 +11,7 @@
  * label; the id is just a stable key.
  */
 import type { AdventureJson, Scene, Choice, Tier, JsonShareConfig } from 'console-adventure';
+import { omit, omitFromRecord } from './omit';
 
 // ─── scene edits ──────────────────────────────────────────────
 
@@ -62,10 +63,7 @@ export function addScene(json: AdventureJson): { json: AdventureJson; id: string
  */
 export function deleteScene(json: AdventureJson, sceneId: string): AdventureJson {
 	if (json.start === sceneId) return json;
-	const { [sceneId]: _drop, ...remaining } = json.scenes;
-	void _drop;
-	// Sweep all `next` references that pointed here and null
-	// them out so the graph doesn't dangle.
+	const remaining = omitFromRecord(json.scenes, sceneId);
 	const sweptScenes: Record<string, Scene> = {};
 	for (const [id, scene] of Object.entries(remaining)) {
 		sweptScenes[id] = {
@@ -80,8 +78,8 @@ export function deleteScene(json: AdventureJson, sceneId: string): AdventureJson
 
 function nextSceneId(json: AdventureJson): string {
 	// Prefer scene-N where N is the smallest positive integer
-	// not already in use. This keeps newly-created ids
-	// human-readable instead of timestamp-y.
+	// not already in use. Keeps newly-created ids human-readable
+	// instead of timestamp-y.
 	const taken = new Set(Object.keys(json.scenes));
 	let n = Object.keys(json.scenes).length + 1;
 	while (taken.has(`scene-${n}`)) n++;
@@ -150,7 +148,8 @@ export function updateTier(
 
 export function addTier(json: AdventureJson): AdventureJson {
 	const current = json.tiers ?? [];
-	const nextScore = current.length === 0 ? 0 : Math.max(...current.map((t) => t.minScore)) + 1;
+	const nextScore =
+		current.length === 0 ? 0 : Math.max(...current.map((t) => t.minScore)) + 1;
 	return {
 		...json,
 		tiers: [...current, { minScore: nextScore, label: 'Tier', color: 'primary' }]
@@ -183,9 +182,9 @@ export function toggleShare(json: AdventureJson, enabled: boolean): AdventureJso
 		};
 	}
 	if (!enabled && json.share) {
-		const { share: _drop, ...rest } = json;
-		void _drop;
-		return rest as AdventureJson;
+		// Omit drops the share key; the remaining shape matches
+		// AdventureJson (share was optional anyway).
+		return omit(json, 'share');
 	}
 	return json;
 }

@@ -18,7 +18,7 @@
  * playtest lives next to the graph so iterating on a scene + re-
  * running it is one click away.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createAdventureFromJson, type Adventure, type Logger } from 'console-adventure';
 import type { AdventureJson } from 'console-adventure';
 import {
@@ -236,7 +236,7 @@ function TerminalLine({ line }: { line: LogLine }) {
 	// first non-empty one (we're going to apply it as padding
 	// instead).
 	let stripped = false;
-	const rendered: Array<JSX.Element | null> = segments.map((seg, i) => {
+	const rendered: ReactNode[] = segments.map((seg, i) => {
 		let s = seg;
 		if (!stripped && s.length > 0) {
 			s = s.replace(/^\s+/, '');

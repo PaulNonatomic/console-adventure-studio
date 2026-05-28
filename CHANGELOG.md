@@ -3,6 +3,47 @@
 All notable changes to this project will be documented in this file. The format
 is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] — internal cleanup pass
+
+### Changed
+
+- `lib/maxScore.ts` removed; `computeMaxScore` and `tierFor` now imported
+  from `console-adventure@0.4.0` (which exposes them as public helpers).
+  Single source of truth for the DFS — same algorithm, one implementation.
+- `lib/theme.ts` no longer hardcodes the brand palette. Sources `PHOSPHOR /
+  AMBER / MAGENTA / CYAN / TEXT / DIM / VOID` from `console-shell`'s
+  `DEFAULT_THEME` so any palette shift upstream flows through automatically.
+- `lib/edit.ts` uses a small `omit` / `omitFromRecord` helper instead of
+  the `const { [key]: _drop, ...rest } = obj; void _drop;` idiom.
+- `components/AdventureEditor.tsx` no longer recomputes max score on every
+  render (was running the full DFS in a footnote string). Uses the prop.
+- `components/AdventureEditor.tsx` derives the tier-colour dropdown from
+  `THEME_COLOR_SLOTS` (sourced from `console-shell`'s `ThemeColor`) rather
+  than hardcoding the six slot names. Adding a new colour slot upstream
+  lights it up here automatically.
+- `lib/graph.ts` lifts edge-styling constants (`EDGE_LABEL_STYLE`,
+  `EDGE_STROKE_STYLE`, `ARROW_MARKER`) to module scope rather than
+  rebuilding them per edge per graph build.
+
+### Fixed
+
+- `Inputs.tsx` `Button` was using a literal `'#FF388F'` for danger colour
+  instead of the imported `MAGENTA` constant.
+- `Inputs.tsx` `InputProps` had a dead `monospace?: boolean` prop never
+  read by any consumer.
+- `Terminal.tsx` used the global `JSX.Element` type which isn't reliably
+  present under `jsx: react-jsx`; switched to `React.ReactNode`.
+- `Toolbar.tsx` contained a noise comment placating an unused-import warning
+  that wasn't actually relevant.
+
+### Added
+
+- vitest + jsdom — first test suite in this package. 33 tests covering
+  every `lib/edit.ts` helper (including the "refuses to delete last
+  remaining choice" and "rewires next references on scene delete" cases),
+  `lib/storage.ts` round-trips, and the `omit` helpers.
+- CI now runs `npm test` before `npm run build`.
+
 ## [0.2.0] — Unreleased
 
 Live editing.
