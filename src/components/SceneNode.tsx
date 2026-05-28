@@ -10,7 +10,7 @@
  * us); the parent app reacts to selection by populating the
  * side panel with full details.
  */
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, MAGENTA, TEXT, DIM } from '../lib/theme';
 import type { SceneNodeData } from '../lib/graph';
@@ -24,11 +24,21 @@ import type { SceneNodeData } from '../lib/graph';
  */
 function SceneNodeImpl({ data, selected }: NodeProps) {
 	const d = data as SceneNodeData;
+	// Border priority: selected > unreachable (magenta warning) >
+	// start > default. Selection should always win visually so
+	// the user can see what they're editing.
+	const borderColor = selected
+		? AMBER
+		: d.isUnreachable
+		? MAGENTA
+		: d.isStart
+		? MAGENTA
+		: PANEL_BORDER;
 	return (
 		<div
 			style={{
 				background: PANEL,
-				border: `2px solid ${selected ? AMBER : d.isStart ? MAGENTA : PANEL_BORDER}`,
+				border: `2px solid ${borderColor}`,
 				borderRadius: 10,
 				padding: '12px 14px',
 				width: 300,
@@ -37,9 +47,46 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 				boxShadow: selected
 					? `0 0 0 4px ${AMBER}22`
 					: '0 2px 8px rgba(0,0,0,0.4)',
-				transition: 'border-color 120ms, box-shadow 120ms'
+				transition: 'border-color 120ms, box-shadow 120ms',
+				position: 'relative'
 			}}
 		>
+			{/* Top-right validation badges. Stacked horizontally
+			    so a node with multiple issues shows all of them. */}
+			{(d.isUnreachable || d.isDeadEnd || d.hasMissingTarget || d.inDegree > 0) && (
+				<div
+					style={{
+						position: 'absolute',
+						top: -10,
+						right: 8,
+						display: 'flex',
+						gap: 4,
+						pointerEvents: 'none'
+					}}
+				>
+					{d.inDegree > 0 && (
+						<Badge color={DIM} title={`${d.inDegree} choice(s) point here`}>
+							← {d.inDegree}
+						</Badge>
+					)}
+					{d.isUnreachable && (
+						<Badge color={MAGENTA} title="No path from start reaches this scene">
+							UNREACHABLE
+						</Badge>
+					)}
+					{d.isDeadEnd && (
+						<Badge color={MAGENTA} title="No path from here reaches an ending">
+							DEAD END
+						</Badge>
+					)}
+					{d.hasMissingTarget && (
+						<Badge color={MAGENTA} title="A choice points at a scene that doesn't exist">
+							MISSING TARGET
+						</Badge>
+					)}
+				</div>
+			)}
+
 			{/* Inbound handle on top, outbound on bottom — matches the
 			    layered top-down auto-layout. */}
 			<Handle type="target" position={Position.Top} style={{ background: AMBER }} />
@@ -139,3 +186,38 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 }
 
 export const SceneNode = memo(SceneNodeImpl);
+
+/**
+ * Pill-style indicator shown above the node. Used for in-degree,
+ * unreachable, dead-end, and missing-target flags. Border colour
+ * carries the semantic — magenta for problems, dim for purely
+ * informational counts.
+ */
+function Badge({
+	color,
+	title,
+	children
+}: {
+	color: string;
+	title: string;
+	children: ReactNode;
+}) {
+	return (
+		<span
+			title={title}
+			style={{
+				background: PANEL,
+				border: `1px solid ${color}`,
+				color,
+				fontSize: 8,
+				fontWeight: 700,
+				letterSpacing: '0.08em',
+				padding: '2px 6px',
+				borderRadius: 10,
+				lineHeight: 1
+			}}
+		>
+			{children}
+		</span>
+	);
+}

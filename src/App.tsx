@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ReactFlow,
+	ReactFlowProvider,
 	Background,
 	Controls,
 	MiniMap,
@@ -79,6 +80,7 @@ import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { ShipDialog } from './components/ShipDialog';
+import { InlineSceneEditor } from './components/InlineSceneEditor';
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
 
 /**
@@ -138,7 +140,22 @@ import type { AdventureJson } from 'console-adventure';
 
 const nodeTypes = { scene: SceneNode, finish: FinishNode };
 
+/**
+ * Outermost wrapper. The Provider is mounted here so any
+ * descendant — including the inline scene editor portal — can
+ * call `useReactFlow()` to get hold of the canvas instance and
+ * convert flow coordinates to screen coordinates. Without it,
+ * `useReactFlow()` throws "Zustand provider not found."
+ */
 export default function App() {
+	return (
+		<ReactFlowProvider>
+			<AppInner />
+		</ReactFlowProvider>
+	);
+}
+
+function AppInner() {
 	const [json, setJson] = useState<AdventureJson>(FOUNDRY_EXAMPLE);
 	const [jsonVersion, setJsonVersion] = useState(0);
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
@@ -151,6 +168,16 @@ export default function App() {
 	// flag lives under `cas:skipBoot` — checked by
 	// `shouldShowBootOverlay()` so the read is encapsulated.
 	const [showBoot, setShowBoot] = useState<boolean>(() => shouldShowBootOverlay());
+	// Move 02a: when the user clicks ⤢ on the inline editor we
+	// want the right-panel SceneEditor to take focus. We don't
+	// deselect (the node is still the subject of editing) — we
+	// just suppress the floating card. Reset whenever the
+	// selection changes so a fresh click on a different node
+	// shows the inline card again.
+	const [inlineCollapsed, setInlineCollapsed] = useState(false);
+	useEffect(() => {
+		setInlineCollapsed(false);
+	}, [selectedScene]);
 
 	// Whether localStorage is usable in this browsing context.
 	// Resolved once on first render; passed through to the
@@ -435,6 +462,19 @@ export default function App() {
 
 			<MarkerDefs />
 
+			{selectedScene && !inlineCollapsed && (
+				<InlineSceneEditor
+					json={json}
+					sceneId={selectedScene}
+					onJsonChange={handleJsonChange}
+					onClose={() => {
+						setSelectedScene(null);
+						setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
+					}}
+					onExpand={() => setInlineCollapsed(true)}
+				/>
+			)}
+
 			<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 				<div style={{ flex: 1, position: 'relative' }}>
 					<ReactFlow
@@ -498,8 +538,36 @@ export default function App() {
 							pointerEvents: 'none'
 						}}
 					>
-						scroll to zoom · drag to pan · click a scene to edit
+						scroll to zoom · drag to pan · click a scene to edit inline
 					</div>
+
+					{/* Restore-card chip — visible only when the user
+					    expanded the inline editor into the side panel.
+					    Lets them bring the floating card back without
+					    losing selection. Bottom-right so it's out of the
+					    way of the bottom-left controls hint. */}
+					{selectedScene && inlineCollapsed && (
+						<button
+							onClick={() => setInlineCollapsed(false)}
+							style={{
+								position: 'absolute',
+								bottom: 16,
+								right: 16,
+								background: PANEL,
+								color: AMBER,
+								border: `1px solid ${AMBER}`,
+								borderRadius: 14,
+								padding: '5px 11px',
+								fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
+								fontSize: 10,
+								cursor: 'pointer',
+								letterSpacing: '0.05em'
+							}}
+							title="Re-anchor the inline editor to the selected node"
+						>
+							⤡ show inline editor
+						</button>
+					)}
 				</div>
 
 				<RightPanel

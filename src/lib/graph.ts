@@ -17,6 +17,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { AdventureJson } from 'console-adventure';
 import { AMBER, PANEL_BORDER, VOID } from './theme';
+import { validate } from './validate';
 
 // Static edge-styling constants, lifted to module scope so we
 // don't allocate fresh objects per edge on every build of the
@@ -69,6 +70,16 @@ export interface SceneNodeData extends Record<string, unknown> {
 		next: string | null;
 	}>;
 	isStart: boolean;
+	/**
+	 * Validation flags computed in `buildGraph` and rendered
+	 * as corner badges on the node. Shared with the ship dialog
+	 * via `lib/validate.ts`.
+	 */
+	isUnreachable: boolean;
+	isDeadEnd: boolean;
+	hasMissingTarget: boolean;
+	/** Number of choices across all scenes that point at this one. */
+	inDegree: number;
 }
 
 export interface FinishNodeData extends Record<string, unknown> {
@@ -85,6 +96,13 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 	const nodes: Node[] = [];
 	const edges: Edge[] = [];
 
+	// Single pass over the graph for validation — same algorithm
+	// the ship dialog uses. Result feeds the badges on each node.
+	const v = validate(json);
+	const unreachableSet = new Set(v.unreachable);
+	const deadEndSet = new Set(v.deadEnds);
+	const missingTargetScenes = new Set(v.missingTargets.map((m) => m.scene));
+
 	// Scene nodes.
 	for (const [sceneId, scene] of Object.entries(json.scenes)) {
 		nodes.push({
@@ -96,7 +114,11 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 				heading: scene.heading,
 				narration: scene.narration,
 				choices: scene.choices,
-				isStart: sceneId === json.start
+				isStart: sceneId === json.start,
+				isUnreachable: unreachableSet.has(sceneId),
+				isDeadEnd: deadEndSet.has(sceneId),
+				hasMissingTarget: missingTargetScenes.has(sceneId),
+				inDegree: v.inDegree[sceneId] ?? 0
 			} satisfies SceneNodeData
 		});
 
