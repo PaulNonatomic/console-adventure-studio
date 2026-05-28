@@ -19,7 +19,13 @@
  *     rows here vs stacked blocks there) but the underlying
  *     immutable JSON updates are identical.
  */
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+	useEffect,
+	useRef,
+	useState,
+	type CSSProperties,
+	type ReactNode
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useReactFlow, useStore } from '@xyflow/react';
 import type { AdventureJson } from 'console-adventure';
@@ -89,7 +95,79 @@ export function InlineSceneEditor({
 		return () => window.removeEventListener('resize', onResize);
 	}, []);
 
+	// User-applied screen-space position. While null, the card
+	// auto-anchors to the selected node (the default behaviour
+	// from Move 02a). Once the user grabs the header and drags,
+	// userPos sticks until the selection changes — they parked
+	// it somewhere on purpose, the auto-positioner shouldn't
+	// yank it back on the next pan/zoom.
+	const [userPos, setUserPos] = useState<{ x: number; y: number } | null>(null);
+
+	// Drop the user's manual position whenever the selection
+	// flips to a different scene. The new scene's editor should
+	// auto-anchor to its node, not inherit the previous card's
+	// custom location.
+	useEffect(() => {
+		setUserPos(null);
+	}, [sceneId]);
+
+	// Drag state. `dragging` toggles the global mousemove /
+	// mouseup listeners via the effect below. `dragStartRef`
+	// captures the offsets at mousedown so the move handler can
+	// translate cursor delta into card delta without re-reading
+	// stale state on every move event.
+	const [dragging, setDragging] = useState(false);
+	const dragStartRef = useRef<{
+		mouseX: number;
+		mouseY: number;
+		cardX: number;
+		cardY: number;
+	} | null>(null);
+
+	// Window-level mousemove / mouseup while dragging. Bound
+	// only while `dragging` is true so the listeners don't
+	// linger when the card isn't being moved. We clamp to the
+	// viewport on every move so the user can't drag the card
+	// fully off-screen.
+	useEffect(() => {
+		if (!dragging) return;
+		const onMove = (e: MouseEvent) => {
+			const start = dragStartRef.current;
+			if (!start) return;
+			const dx = e.clientX - start.mouseX;
+			const dy = e.clientY - start.mouseY;
+			const next = {
+				x: Math.max(
+					VIEWPORT_MARGIN,
+					Math.min(
+						start.cardX + dx,
+						window.innerWidth - CARD_WIDTH - VIEWPORT_MARGIN
+					)
+				),
+				// Keep at least the header strip on-screen so the
+				// user can always close / re-grab the card.
+				y: Math.max(
+					VIEWPORT_MARGIN,
+					Math.min(start.cardY + dy, window.innerHeight - 48)
+				)
+			};
+			setUserPos(next);
+		};
+		const onUp = () => {
+			setDragging(false);
+			dragStartRef.current = null;
+		};
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+		return () => {
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+	}, [dragging]);
+
 	if (!scene || !node) return null;
+
+	const maxHeight = Math.min(620, winSize.h - 32);
 
 	// Top-left of the node in screen coords. v12's
 	// flowToScreenPosition takes flow-space xy and returns
@@ -107,14 +185,23 @@ export function InlineSceneEditor({
 	// the viewport mid-line, so the card never falls off-screen.
 	const flipLeft = nodeTopRight.x + GAP + CARD_WIDTH > winSize.w - VIEWPORT_MARGIN;
 
-	let left = flipLeft ? nodeTopLeft.x - GAP - CARD_WIDTH : nodeTopRight.x + GAP;
-	let top = nodeTopLeft.y;
+	let left: number;
+	let top: number;
+	if (userPos) {
+		// User dragged it somewhere — honour their pick. Clamp
+		// against the window so they can't drag the entire card
+		// off-screen and lose access to the close button.
+		left = userPos.x;
+		top = userPos.y;
+	} else {
+		left = flipLeft ? nodeTopLeft.x - GAP - CARD_WIDTH : nodeTopRight.x + GAP;
+		top = nodeTopLeft.y;
+	}
 
 	// Clamp horizontally so the card stays on-screen if the node
-	// gets dragged near the edge.
+	// gets dragged near the edge, OR if the user dragged the
+	// card itself near the edge.
 	left = Math.max(VIEWPORT_MARGIN, Math.min(left, winSize.w - CARD_WIDTH - VIEWPORT_MARGIN));
-
-	const maxHeight = Math.min(620, winSize.h - 32);
 	// Clamp vertically: top + height can't exceed window height.
 	top = Math.max(VIEWPORT_MARGIN, Math.min(top, winSize.h - maxHeight - VIEWPORT_MARGIN));
 
@@ -139,10 +226,31 @@ export function InlineSceneEditor({
 	const sceneIds = Object.keys(json.scenes).sort();
 	const isStart = json.start === sceneId;
 
+	const onHeaderMouseDown = (e: React.MouseEvent) => {
+		// Buttons inside the header have their own handlers and
+		// should not start a drag. We check the event target's
+		// closest `button` ancestor; if there is one, bail.
+		const targetEl = e.target as HTMLElement;
+		if (targetEl.closest('button')) return;
+		// Only left mouse button.
+		if (e.button !== 0) return;
+		e.preventDefault();
+		dragStartRef.current = {
+			mouseX: e.clientX,
+			mouseY: e.clientY,
+			cardX: left,
+			cardY: top
+		};
+		setDragging(true);
+	};
+
 	return createPortal(
 		<div style={cardStyle} role="dialog" aria-label={`edit scene ${sceneId}`}>
-			{/* Header strip — EDITING label, path + heading, id, expand, close. */}
+			{/* Header strip — also the drag handle. EDITING label,
+			    path + heading, id, re-anchor (only when moved),
+			    expand, close. */}
 			<div
+				onMouseDown={onHeaderMouseDown}
 				style={{
 					background: PANEL_2,
 					borderBottom: `1px solid ${PANEL_BORDER}`,
@@ -150,7 +258,9 @@ export function InlineSceneEditor({
 					display: 'flex',
 					alignItems: 'center',
 					justifyContent: 'space-between',
-					gap: 12
+					gap: 12,
+					cursor: dragging ? 'grabbing' : 'grab',
+					userSelect: 'none'
 				}}
 			>
 				<div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
@@ -183,6 +293,14 @@ export function InlineSceneEditor({
 					<span style={{ color: DIM, fontSize: 10 }}>
 						id <span style={{ color: CYAN }}>{sceneId}</span>
 					</span>
+					{userPos && (
+						<HeaderButton
+							onClick={() => setUserPos(null)}
+							title="Re-anchor to the selected node"
+						>
+							↺
+						</HeaderButton>
+					)}
 					<HeaderButton onClick={onExpand} title="Open in side panel">⤢</HeaderButton>
 					<HeaderButton onClick={onClose} title="Close (deselect)">×</HeaderButton>
 				</div>
