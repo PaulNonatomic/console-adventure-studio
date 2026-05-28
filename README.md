@@ -12,9 +12,11 @@
 
 ## What this is
 
-`console-adventure-studio` is a tool for working with the JSON-shaped narrative configs that [`console-adventure`](https://github.com/PaulNonatomic/console-adventure) consumes. Today (v0.1) it's a **read-only visualiser**: load an adventure, see its scene graph laid out as a node diagram, inspect any scene's full content in the side panel, watch the max score and tier table resolve live.
+`console-adventure-studio` is a tool for working with the JSON-shaped narrative configs that [`console-adventure`](https://github.com/PaulNonatomic/console-adventure) consumes.
 
-Edit mode (drag arrows between scenes to wire choices, edit fields in the side panel, validate, export JSON) is planned for v0.2.
+**v0.2** adds live editing on top of the v0.1 visualiser: start a new adventure from scratch, edit scene headings / narration / choices / tiers / share config in the inspector panel, watch the graph and the in-studio playtest terminal update in real time, then export the result as a JSON file your site can feed straight into `createAdventureFromJson`.
+
+What's still on the roadmap: drag-arrow rewiring directly on the graph, scene-id renaming with auto-fixup, validation highlights for orphan / unreachable scenes.
 
 The Foundry — the dev-console game on [nonatomic.co.uk](https://nonatomic.co.uk) — ships built-in as the example. Open the studio, the graph is already there.
 
@@ -22,10 +24,32 @@ The Foundry — the dev-console game on [nonatomic.co.uk](https://nonatomic.co.u
 
 ## What you can do today
 
+**View**
+
 - **See the whole adventure at a glance.** Scenes lay out top-down in BFS layers from the start node, edges are labelled with the choice text and points, the start scene is highlighted, and reconverging branches (two scenes both pointing to a third) show up correctly without double-counting.
-- **Inspect any scene.** Click a node to drop its full heading, narration, every choice's flavour text, point value, and `next` target into the right-hand panel.
-- **See live stats.** Scene count, choice count, terminal choices, max score (computed with the same DFS the engine uses), tier table, share text/url templates.
-- **Load your own JSON.** Built-in foundry example, paste from clipboard, upload a file, or fetch from a URL. Any config that conforms to the [`adventure.schema.json`](https://github.com/PaulNonatomic/console-adventure/blob/main/adventure.schema.json) shape works.
+- **Live stats.** Scene count, choice count, terminal choices, max score (computed with the same DFS the engine uses), tier table, share text/url templates.
+
+**Load**
+
+- **Built-in foundry example**, paste from clipboard, upload a file, or fetch from a URL. Any config that conforms to the [`adventure.schema.json`](https://github.com/PaulNonatomic/console-adventure/blob/main/adventure.schema.json) shape works.
+- **New from scratch** — click `new` in the toolbar to start with a blank single-scene template.
+
+**Edit live**
+
+- Click any scene to edit its heading, narration, and every choice (label / points / flavour / next-target) in the right panel. Every change updates the graph and the playtest terminal in real time.
+- Add and delete scenes from the adventure overview. New scenes get auto-incremented ids; deleting a scene rewires any choices that pointed at it to `null` so the script stays valid.
+- Add and delete choices on each scene. The `next` dropdown lists every existing scene plus `(finish — null)` for terminal choices.
+- Edit the tier table — add rows, change min-score / label / colour slot, delete rows.
+- Enable, edit, or remove the share intent — including the template strings (`${score}` / `${max}` / `${tier}`) and the platform preset (X / Bluesky / Mastodon).
+- Change the start scene via dropdown — the graph re-focuses on the new entry point automatically.
+
+**Playtest**
+
+- Click the **Play** tab on the right panel to run the adventure inside the studio, driven by the real `console-adventure` engine via a captured `Logger`. Choice buttons reflect the current scene; play / restart / share controls appear at the right moments. Edits to scenes restart the playtest from scratch (because the underlying script changed).
+
+**Export**
+
+- Download the current state as a JSON file (with the canonical `$schema` URL pre-filled) or copy it to the clipboard. The result drops straight into `createAdventureFromJson(json, { onComplete: ... })` on any site that uses `console-adventure`.
 
 ---
 

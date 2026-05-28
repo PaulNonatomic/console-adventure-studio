@@ -3,33 +3,47 @@
  * the left, tabbed RightPanel on the right (Inspect / Play).
  *
  * State held here:
- *   - `json`           — current AdventureJson (starts as foundry example)
- *   - `jsonVersion`    — counter incremented on every load,
- *                        used as the ReactFlow `key` so the
- *                        graph cleanly remounts (and re-runs
- *                        fitView) when the user loads a
- *                        different adventure
+ *   - `json`           — current AdventureJson
+ *   - `jsonVersion`    — counter, bumped on structural events
+ *                        (load, new, start-scene change). Used
+ *                        as the ReactFlow `key` so the canvas
+ *                        remounts and fitView re-runs.
  *   - `selectedScene`  — id of the selected scene node, or null
  *   - `error`          — last error message from a load action
  *
- * The graph runs in *uncontrolled* mode: nodes / edges go in
- * via `defaultNodes` / `defaultEdges` and React Flow owns
- * selection state internally. Earlier versions passed them as
- * controlled `nodes` / `edges` without an `onNodesChange`
- * handler, which left React Flow unable to propagate selection
- * to some nodes — clicks visibly did nothing on certain scenes.
- * Bumping the JSON version key re-mounts the canvas when the
- * user loads new data.
+ * The graph runs in *controlled* mode (`useNodesState` /
+ * `useEdgesState`). Without the change handlers React Flow
+ * can't propagate selection state to all nodes — some clicks
+ * visibly do nothing. With them, edits to `json` flow into the
+ * graph via a useEffect that rebuilds the nodes/edges arrays,
+ * and the canvas updates in place without losing the user's
+ * pan/zoom or selection.
+ *
+ * Live editing path:
+ *   user edits a field in the panel
+ *     → onJsonChange called with updated AdventureJson
+ *     → setJson(next)
+ *     → useEffect rebuilds graph nodes/edges, setRfNodes runs
+ *     → ReactFlow re-renders the canvas in place (no remount)
+ *
+ * Structural path (load / new / change start scene):
+ *   user clicks load/new
+ *     → setJson(next) + bumpVersion()
+ *     → key={jsonVersion} change forces ReactFlow remount
+ *     → fitView re-runs focused on start + successors
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	ReactFlow,
 	Background,
 	Controls,
 	MiniMap,
 	type Node,
+	type Edge,
 	type OnSelectionChangeParams,
-	BackgroundVariant
+	BackgroundVariant,
+	useNodesState,
+	useEdgesState
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -41,6 +55,7 @@ import { buildGraph, FINISH_NODE_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
 import { computeMaxScore } from './lib/maxScore';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
+import { BLANK_ADVENTURE } from './lib/blank';
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
 import type { AdventureJson } from 'console-adventure';
 
@@ -52,31 +67,26 @@ export default function App() {
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
+	const [rfNodes, setRfNodes, onNodesChange] = useNodesState<Node>([]);
+	const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
 	const maxScore = useMemo(() => computeMaxScore(json), [json]);
 
-	const { nodes, edges } = useMemo(() => {
+	// Rebuild the React Flow nodes + edges whenever the json
+	// changes. Setter functions are stable (useNodesState gives
+	// them a fixed identity per mount) so this effect runs
+	// strictly on json / maxScore changes, not on every render.
+	useEffect(() => {
 		const built = buildGraph(json, maxScore);
-		return {
-			nodes: layoutGraph(built.nodes, built.edges, json.start),
-			edges: built.edges
-		};
-	}, [json, maxScore]);
+		setRfNodes(layoutGraph(built.nodes, built.edges, json.start));
+		setRfEdges(built.edges);
+	}, [json, maxScore, setRfNodes, setRfEdges]);
 
-	// Nodes to focus on at first render: the start scene plus
-	// its direct successors. `fitView` previously fitted the
-	// whole graph, which at minZoom 1.0 pushed the entrance off
-	// the top of the viewport — the user landed looking at the
-	// middle of the script instead of the entry point. Focusing
-	// on the start + first-layer successors guarantees the
-	// entry node is visible with one layer of context, and the
-	// user can pan / zoom out to see the rest.
 	const focusNodeIds = useMemo(() => {
 		const successors =
 			json.scenes[json.start]?.choices
 				.map((c) => c.next)
 				.filter((n): n is string => n !== null) ?? [];
-		// De-duplicate — two choices can both point to the same
-		// next scene; we want each id at most once.
 		return Array.from(new Set([json.start, ...successors]));
 	}, [json]);
 
@@ -88,6 +98,18 @@ export default function App() {
 			} else {
 				setSelectedScene(node.id);
 			}
+		},
+		[]
+	);
+
+	// Edits stream in from the editor panels via this handler.
+	// Default behaviour is "update in place" (no remount).
+	// Callers pass `{ remount: true }` for structural changes
+	// (start-scene swap) where they want fitView to re-run.
+	const handleJsonChange = useCallback(
+		(next: AdventureJson, opts?: { remount?: boolean }) => {
+			setJson(next);
+			if (opts?.remount) setJsonVersion((v) => v + 1);
 		},
 		[]
 	);
@@ -115,6 +137,13 @@ export default function App() {
 		setError(null);
 	}
 
+	function newAdventure() {
+		setJson(BLANK_ADVENTURE);
+		setJsonVersion((v) => v + 1);
+		setSelectedScene(null);
+		setError(null);
+	}
+
 	return (
 		<div
 			style={{
@@ -125,7 +154,12 @@ export default function App() {
 				color: '#eef0f5'
 			}}
 		>
-			<Toolbar onLoadExample={loadExample} onLoadJson={loadJson} onError={setError} />
+			<Toolbar
+				onLoadExample={loadExample}
+				onLoadJson={loadJson}
+				onNewAdventure={newAdventure}
+				onError={setError}
+			/>
 
 			{error && (
 				<div
@@ -160,23 +194,14 @@ export default function App() {
 			<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 				<div style={{ flex: 1, position: 'relative' }}>
 					<ReactFlow
-						// Remount when the loaded JSON changes so React
-						// Flow re-runs fitView and clears any stale
-						// internal selection state.
 						key={jsonVersion}
-						defaultNodes={nodes}
-						defaultEdges={edges}
+						nodes={rfNodes}
+						edges={rfEdges}
+						onNodesChange={onNodesChange}
+						onEdgesChange={onEdgesChange}
 						nodeTypes={nodeTypes}
 						onSelectionChange={handleSelectionChange}
 						fitView
-						// Push fitView's auto-fit floor up further per
-						// playtest feedback — at <1.0x the choice labels
-						// in node bodies become hard to read. The `nodes`
-						// option restricts fitView to the start scene +
-						// its direct successors, so the entry point is
-						// always visible at default zoom rather than
-						// being pushed off the top by a "fit everything"
-						// auto-fit.
 						fitViewOptions={{
 							nodes: focusNodeIds.map((id) => ({ id })),
 							padding: 0.15,
@@ -194,9 +219,6 @@ export default function App() {
 							gap={20}
 							size={1}
 						/>
-						{/* Top-right: out of the way of the hint text
-						    in the bottom-left and the MiniMap in the
-						    bottom-right. */}
 						<Controls
 							position="top-right"
 							style={{ background: PANEL, border: `1px solid ${PANEL_BORDER}` }}
@@ -225,7 +247,7 @@ export default function App() {
 							pointerEvents: 'none'
 						}}
 					>
-						scroll to zoom · drag to pan · click a scene to inspect
+						scroll to zoom · drag to pan · click a scene to edit
 					</div>
 				</div>
 
@@ -233,6 +255,8 @@ export default function App() {
 					json={json}
 					maxScore={maxScore}
 					selectedSceneId={selectedScene}
+					onJsonChange={handleJsonChange}
+					onSelectScene={setSelectedScene}
 				/>
 			</div>
 		</div>

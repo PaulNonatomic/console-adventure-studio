@@ -1,12 +1,9 @@
 /**
  * The right-hand panel — a small tab system that hosts both
- * the inspector (read-only scene details) and the in-studio
- * playtest terminal.
+ * the inspector/editor and the in-studio playtest terminal.
  *
  * Both tabs are rendered at all times (just hidden via CSS)
- * so the terminal's adventure state survives a tab switch —
- * you can read a scene's full content, switch back to Play
- * mid-game, and the game is still where you left it.
+ * so the terminal's adventure state survives a tab switch.
  */
 import { useState, type ReactNode } from 'react';
 import { Terminal } from './Terminal';
@@ -20,15 +17,23 @@ interface Props {
 	json: AdventureJson;
 	maxScore: number;
 	selectedSceneId: string | null;
+	onJsonChange: (next: AdventureJson, opts?: { remount?: boolean }) => void;
+	onSelectScene: (id: string | null) => void;
 }
 
-export function RightPanel({ json, maxScore, selectedSceneId }: Props) {
+export function RightPanel({
+	json,
+	maxScore,
+	selectedSceneId,
+	onJsonChange,
+	onSelectScene
+}: Props) {
 	const [tab, setTab] = useState<Tab>('inspect');
 
 	return (
 		<aside
 			style={{
-				width: 380,
+				width: 400,
 				background: PANEL,
 				borderLeft: `1px solid ${PANEL_BORDER}`,
 				color: '#eef0f5',
@@ -45,6 +50,8 @@ export function RightPanel({ json, maxScore, selectedSceneId }: Props) {
 					json={json}
 					maxScore={maxScore}
 					selectedSceneId={selectedSceneId}
+					onJsonChange={onJsonChange}
+					onSelectScene={onSelectScene}
 				/>
 			</TabContent>
 
@@ -121,9 +128,6 @@ function TabContent({
 	visible: boolean;
 	children: ReactNode;
 }) {
-	// Keep both tabs mounted; toggle visibility so terminal state
-	// (current game progress, captured log lines) persists across
-	// tab switches.
 	return (
 		<div
 			style={{

@@ -1,37 +1,33 @@
 /**
- * Right-hand inspector panel — shows the full details of the
- * currently selected scene (or the finish node). Falls back to
- * a stats summary when nothing is selected.
+ * Right-panel content — either a scene editor (when a scene is
+ * selected in the graph) or the adventure-level editor (when
+ * nothing's selected). The header strip with the scene/adventure
+ * label is shared.
+ *
+ * The outer aside / width / border are provided by RightPanel,
+ * which hosts both this inspector and the playtest terminal in
+ * a tab system. ScenePanel is content-only.
  */
-import {
-	PANEL_BORDER,
-	PHOSPHOR,
-	AMBER,
-	MAGENTA,
-	CYAN,
-	TEXT,
-	DIM
-} from '../lib/theme';
+import { PHOSPHOR, DIM, PANEL_BORDER } from '../lib/theme';
+import { SceneEditor } from './SceneEditor';
+import { AdventureEditor } from './AdventureEditor';
 import type { AdventureJson } from 'console-adventure';
 
 interface Props {
 	json: AdventureJson;
 	maxScore: number;
 	selectedSceneId: string | null;
+	onJsonChange: (next: AdventureJson, opts?: { remount?: boolean }) => void;
+	onSelectScene: (id: string | null) => void;
 }
 
-const sectionLabel = {
-	fontSize: 9,
-	fontWeight: 700,
-	letterSpacing: '0.1em',
-	color: DIM,
-	marginBottom: 6
-} as const;
-
-// The outer aside / width / border are now provided by
-// RightPanel, which hosts both this inspector and the playtest
-// terminal in a tab system. ScenePanel is content-only.
-export function ScenePanel({ json, maxScore, selectedSceneId }: Props) {
+export function ScenePanel({
+	json,
+	maxScore,
+	selectedSceneId,
+	onJsonChange,
+	onSelectScene
+}: Props) {
 	const scene = selectedSceneId ? json.scenes[selectedSceneId] : null;
 
 	return (
@@ -63,189 +59,22 @@ export function ScenePanel({ json, maxScore, selectedSceneId }: Props) {
 			</div>
 
 			<div style={{ flex: 1, overflow: 'auto', padding: '14px 18px' }}>
-				{scene ? (
-					<SceneDetail sceneId={selectedSceneId!} scene={scene} />
+				{selectedSceneId && scene ? (
+					<SceneEditor
+						json={json}
+						sceneId={selectedSceneId}
+						onJsonChange={onJsonChange}
+						onSelectScene={onSelectScene}
+					/>
 				) : (
-					<AdventureStats json={json} maxScore={maxScore} />
+					<AdventureEditor
+						json={json}
+						maxScore={maxScore}
+						onJsonChange={onJsonChange}
+						onSelectScene={onSelectScene}
+					/>
 				)}
 			</div>
 		</>
-	);
-}
-
-function SceneDetail({
-	sceneId,
-	scene
-}: {
-	sceneId: string;
-	scene: AdventureJson['scenes'][string];
-}) {
-	return (
-		<>
-			<div style={sectionLabel}>ID</div>
-			<div style={{ color: CYAN, fontSize: 12, marginBottom: 12 }}>{sceneId}</div>
-
-			<div style={sectionLabel}>HEADING</div>
-			<div style={{ color: PHOSPHOR, fontWeight: 700, fontSize: 13, marginBottom: 12 }}>
-				{scene.heading}
-			</div>
-
-			<div style={sectionLabel}>NARRATION</div>
-			<div
-				style={{
-					color: TEXT,
-					fontSize: 11,
-					lineHeight: 1.6,
-					marginBottom: 16,
-					whiteSpace: 'pre-wrap'
-				}}
-			>
-				{scene.narration.join('\n')}
-			</div>
-
-			<div style={sectionLabel}>CHOICES</div>
-			<div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-				{scene.choices.map((c, i) => (
-					<div
-						key={i}
-						style={{
-							border: `1px solid ${PANEL_BORDER}`,
-							borderRadius: 6,
-							padding: '8px 10px'
-						}}
-					>
-						<div
-							style={{
-								display: 'flex',
-								justifyContent: 'space-between',
-								marginBottom: 4
-							}}
-						>
-							<span style={{ color: AMBER, fontWeight: 600, fontSize: 11 }}>
-								{i + 1}) {c.label}
-							</span>
-							{c.points !== undefined && (
-								<span style={{ color: PHOSPHOR, fontWeight: 700, fontSize: 11 }}>
-									+{c.points}
-								</span>
-							)}
-						</div>
-						{c.flavour && (
-							<div
-								style={{
-									color: DIM,
-									fontSize: 10,
-									lineHeight: 1.5,
-									fontStyle: 'italic',
-									marginBottom: 4
-								}}
-							>
-								▶ {c.flavour}
-							</div>
-						)}
-						<div style={{ color: CYAN, fontSize: 9 }}>
-							→ {c.next === null ? <span style={{ color: MAGENTA }}>FINISH</span> : c.next}
-						</div>
-					</div>
-				))}
-			</div>
-		</>
-	);
-}
-
-function AdventureStats({
-	json,
-	maxScore
-}: {
-	json: AdventureJson;
-	maxScore: number;
-}) {
-	const sceneCount = Object.keys(json.scenes).length;
-	const choiceCount = Object.values(json.scenes).reduce(
-		(n, s) => n + s.choices.length,
-		0
-	);
-	const terminalChoices = Object.values(json.scenes).reduce(
-		(n, s) => n + s.choices.filter((c) => c.next === null).length,
-		0
-	);
-
-	return (
-		<>
-			<div style={{ color: DIM, fontSize: 11, marginBottom: 16, lineHeight: 1.6 }}>
-				Click a scene to inspect it. Click the canvas to come back to this
-				summary.
-			</div>
-
-			<StatRow label="Start scene" value={json.start} color={CYAN} />
-			<StatRow label="Scenes" value={String(sceneCount)} />
-			<StatRow label="Choices" value={String(choiceCount)} />
-			<StatRow label="Terminal choices" value={String(terminalChoices)} />
-			<StatRow label="Max score" value={String(maxScore)} color={PHOSPHOR} />
-
-			{json.tiers && (
-				<>
-					<div style={{ ...sectionLabel, marginTop: 20 }}>TIERS</div>
-					{[...json.tiers]
-						.sort((a, b) => b.minScore - a.minScore)
-						.map((t) => (
-							<StatRow key={t.label} label={`${t.minScore}+`} value={t.label} />
-						))}
-				</>
-			)}
-
-			{json.share && (
-				<>
-					<div style={{ ...sectionLabel, marginTop: 20 }}>SHARE</div>
-					<div style={{ color: DIM, fontSize: 10, marginBottom: 4 }}>text</div>
-					<div
-						style={{
-							color: TEXT,
-							fontSize: 10,
-							lineHeight: 1.5,
-							marginBottom: 8,
-							wordBreak: 'break-word'
-						}}
-					>
-						{json.share.text}
-					</div>
-					<div style={{ color: DIM, fontSize: 10, marginBottom: 4 }}>url</div>
-					<div
-						style={{
-							color: CYAN,
-							fontSize: 10,
-							lineHeight: 1.5,
-							wordBreak: 'break-all'
-						}}
-					>
-						{json.share.url}
-					</div>
-				</>
-			)}
-		</>
-	);
-}
-
-function StatRow({
-	label,
-	value,
-	color = TEXT
-}: {
-	label: string;
-	value: string;
-	color?: string;
-}) {
-	return (
-		<div
-			style={{
-				display: 'flex',
-				justifyContent: 'space-between',
-				marginBottom: 6,
-				fontSize: 11
-			}}
-		>
-			<span style={{ color: DIM }}>{label}</span>
-			<span style={{ color, fontWeight: 600 }}>{value}</span>
-		</div>
 	);
 }

@@ -8,14 +8,21 @@
  */
 import { useRef } from 'react';
 import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, DIM, TEXT } from '../lib/theme';
+// PHOSPHOR is used by the "new" toolbar button (variant=primary).
 
 interface Props {
 	onLoadExample: () => void;
 	onLoadJson: (json: unknown) => void;
+	onNewAdventure: () => void;
 	onError: (message: string) => void;
 }
 
-export function Toolbar({ onLoadExample, onLoadJson, onError }: Props) {
+export function Toolbar({
+	onLoadExample,
+	onLoadJson,
+	onNewAdventure,
+	onError
+}: Props) {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	function handleUpload(file: File) {
@@ -101,6 +108,7 @@ export function Toolbar({ onLoadExample, onLoadJson, onError }: Props) {
 						e.target.value = '';
 					}}
 				/>
+				<TbButton label="new" onClick={onNewAdventure} variant="primary" />
 				<TbButton label="example" onClick={onLoadExample} />
 				<TbButton label="paste JSON" onClick={handlePaste} />
 				<TbButton label="upload" onClick={() => fileInputRef.current?.click()} />
@@ -110,28 +118,39 @@ export function Toolbar({ onLoadExample, onLoadJson, onError }: Props) {
 	);
 }
 
-function TbButton({ label, onClick }: { label: string; onClick: () => void }) {
+function TbButton({
+	label,
+	onClick,
+	variant = 'normal'
+}: {
+	label: string;
+	onClick: () => void;
+	variant?: 'normal' | 'primary';
+}) {
+	const fg = variant === 'primary' ? PHOSPHOR : AMBER;
 	return (
 		<button
 			onClick={onClick}
 			style={{
 				background: 'transparent',
-				color: AMBER,
-				border: `1px solid ${PANEL_BORDER}`,
+				color: fg,
+				border: `1px solid ${variant === 'primary' ? fg : PANEL_BORDER}`,
 				borderRadius: 5,
 				padding: '5px 11px',
 				fontFamily: 'inherit',
 				fontSize: 11,
 				cursor: 'pointer',
-				transition: 'border-color 120ms, color 120ms'
+				transition: 'border-color 120ms, color 120ms, background 120ms'
 			}}
 			onMouseEnter={(e) => {
-				e.currentTarget.style.borderColor = AMBER;
+				e.currentTarget.style.borderColor = fg;
 				e.currentTarget.style.color = TEXT;
+				e.currentTarget.style.background = `${fg}11`;
 			}}
 			onMouseLeave={(e) => {
-				e.currentTarget.style.borderColor = PANEL_BORDER;
-				e.currentTarget.style.color = AMBER;
+				e.currentTarget.style.borderColor = variant === 'primary' ? fg : PANEL_BORDER;
+				e.currentTarget.style.color = fg;
+				e.currentTarget.style.background = 'transparent';
 			}}
 		>
 			{label}
