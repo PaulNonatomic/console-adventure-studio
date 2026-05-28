@@ -8,6 +8,11 @@
  */
 import { useRef } from 'react';
 import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, DIM, TEXT } from '../lib/theme';
+import {
+	readFileAsJson,
+	pasteJsonFromClipboard,
+	fetchJsonFromUrl
+} from '../lib/import';
 
 interface Props {
 	onLoadExample: () => void;
@@ -30,47 +35,20 @@ export function Toolbar({
 }: Props) {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
+	const callbacks = { onLoad: onLoadJson, onError };
+
 	function handleUpload(file: File) {
-		const reader = new FileReader();
-		reader.onload = () => {
-			try {
-				const parsed = JSON.parse(String(reader.result));
-				onLoadJson(parsed);
-			} catch (err) {
-				onError(`Could not parse file: ${(err as Error).message}`);
-			}
-		};
-		reader.readAsText(file);
+		readFileAsJson(file, callbacks);
 	}
 
-	async function handlePaste() {
-		try {
-			const text = await navigator.clipboard.readText();
-			if (!text.trim()) {
-				onError('Clipboard is empty.');
-				return;
-			}
-			const parsed = JSON.parse(text);
-			onLoadJson(parsed);
-		} catch (err) {
-			onError(`Paste failed: ${(err as Error).message}`);
-		}
+	function handlePaste() {
+		void pasteJsonFromClipboard(callbacks);
 	}
 
-	async function handleFetchUrl() {
+	function handleFetchUrl() {
 		const url = window.prompt('Fetch adventure JSON from URL:');
 		if (!url) return;
-		try {
-			const res = await fetch(url);
-			if (!res.ok) {
-				onError(`Fetch failed: ${res.status} ${res.statusText}`);
-				return;
-			}
-			const parsed = await res.json();
-			onLoadJson(parsed);
-		} catch (err) {
-			onError(`Fetch failed: ${(err as Error).message}`);
-		}
+		void fetchJsonFromUrl(url, callbacks);
 	}
 
 	return (

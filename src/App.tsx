@@ -41,7 +41,6 @@ import {
 	type Node,
 	type Edge,
 	type OnSelectionChangeParams,
-	type Viewport,
 	BackgroundVariant,
 	useNodesState,
 	useEdgesState
@@ -76,8 +75,9 @@ import { buildGraph, FINISH_NODE_ID, ARROW_MARKER_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
 import { computeMaxScore } from 'console-adventure';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
-import { BLANK_ADVENTURE } from './lib/blank';
+import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';
+import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
 
 /**
@@ -144,6 +144,11 @@ export default function App() {
 	const [error, setError] = useState<string | null>(null);
 	const [showLoadDialog, setShowLoadDialog] = useState(false);
 	const [currentSaveName, setCurrentSaveName] = useState<string | null>(null);
+	// Boot overlay: shown once per browser unless the user
+	// ticks "don't show on boot" inside it. The persisted skip
+	// flag lives under `cas:skipBoot` — checked by
+	// `shouldShowBootOverlay()` so the read is encapsulated.
+	const [showBoot, setShowBoot] = useState<boolean>(() => shouldShowBootOverlay());
 
 	// Whether localStorage is usable in this browsing context.
 	// Resolved once on first render; passed through to the
@@ -226,44 +231,9 @@ export default function App() {
 		[]
 	);
 
-	// Zoom tuning logger. While iterating, log every meaningful
-	// zoom change so a developer can pan/zoom to a value that
-	// looks right, then copy it back into `DEFAULT_ZOOM`.
-	// Throttled by `> 0.005` delta so a drag doesn't spam the
-	// console. Once the default settles, this whole block (the
-	// ref, handler, and useEffect) can come out.
-	const lastLoggedZoomRef = useRef<number | null>(null);
-	const handleMove = useCallback((_: unknown, viewport: Viewport) => {
-		const z = viewport.zoom;
-		const prev = lastLoggedZoomRef.current;
-		if (prev !== null && Math.abs(z - prev) < 0.005) return;
-		lastLoggedZoomRef.current = z;
-		// eslint-disable-next-line no-console
-		console.log(
-			`%c[adventure-studio]%c zoom %c${z.toFixed(3)}%c · fitView locked to ${DEFAULT_ZOOM} · canvas range [${CANVAS_MIN_ZOOM}, ${CANVAS_MAX_ZOOM}]`,
-			'color: #C7F441; font-weight: bold;',
-			'color: #909090;',
-			'color: #F5A623; font-weight: bold;',
-			'color: #909090;'
-		);
-	}, []);
-
-	// One-shot startup log so the configured defaults are
-	// visible even before the user moves the camera.
-	useEffect(() => {
-		// eslint-disable-next-line no-console
-		console.log(
-			`%c[adventure-studio]%c fitView locks to zoom %c${DEFAULT_ZOOM}%c · user-zoom range [%c${CANVAS_MIN_ZOOM}%c, %c${CANVAS_MAX_ZOOM}%c]. Zoom around to find a value, then update DEFAULT_ZOOM in App.tsx.`,
-			'color: #C7F441; font-weight: bold;',
-			'color: #909090;',
-			'color: #F5A623; font-weight: bold;',
-			'color: #909090;',
-			'color: #F5A623;',
-			'color: #909090;',
-			'color: #F5A623;',
-			'color: #909090;'
-		);
-	}, []);
+	// (Dev-only zoom tuning logger removed in Move 01 — the
+	// DEFAULT_ZOOM value is now settled at 1.056 and the
+	// console spam is no longer earning its keep.)
 
 	// Edits stream in from the editor panels via this handler.
 	// Default behaviour is "update in place" (no remount).
@@ -308,6 +278,37 @@ export default function App() {
 		setCurrentSaveName(null);
 	}
 
+	/**
+	 * Boot overlay's "start from a skeleton" path. Loads the
+	 * three-scene branching scaffold and pre-selects the start
+	 * scene so the editor opens populated and the author can
+	 * type straight into the entrance heading.
+	 */
+	function newFromSkeleton() {
+		setJson(STARTER_ADVENTURE);
+		setJsonVersion((v) => v + 1);
+		setSelectedScene(STARTER_ADVENTURE.start);
+		setError(null);
+		setCurrentSaveName(null);
+	}
+
+	/**
+	 * Boot overlay's "tour the foundry" path. The example is
+	 * already the default; this just ensures we're on it and
+	 * preselects the start scene so the inspector shows scene
+	 * content rather than the adventure-level view. The
+	 * coachmark / tour itself is intentionally not implemented
+	 * in this pass — see the Move 01 spec §"Guided tour" for
+	 * the explicit stub-and-defer decision.
+	 */
+	function tourFoundry() {
+		setJson(FOUNDRY_EXAMPLE);
+		setJsonVersion((v) => v + 1);
+		setSelectedScene(FOUNDRY_EXAMPLE.start);
+		setError(null);
+		setCurrentSaveName(null);
+	}
+
 	function saveCurrent() {
 		// Prefill with the existing save name (if any) or the
 		// adventure's start scene id. window.prompt is good
@@ -342,6 +343,16 @@ export default function App() {
 				color: '#eef0f5'
 			}}
 		>
+			{showBoot && (
+				<BootOverlay
+					onClose={() => setShowBoot(false)}
+					onTour={tourFoundry}
+					onSkeleton={newFromSkeleton}
+					onLoadJson={loadJson}
+					onError={setError}
+				/>
+			)}
+
 			<Toolbar
 				onLoadExample={loadExample}
 				onLoadJson={loadJson}
@@ -401,7 +412,6 @@ export default function App() {
 						onEdgesChange={onEdgesChange}
 						nodeTypes={nodeTypes}
 						onSelectionChange={handleSelectionChange}
-						onMove={handleMove}
 						fitView
 						fitViewOptions={{
 							nodes: focusNodeIds.map((id) => ({ id })),
