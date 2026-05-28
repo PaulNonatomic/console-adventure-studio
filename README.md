@@ -14,11 +14,6 @@ Branching choice-based scripts, rendered as an interactive node graph. Author an
 
 </div>
 
-## Support
-If you like my work then please consider showing your support for console-adventure-studio by giving the repo a star or buying me a brew
-<br><br>
-<a href="https://www.buymeacoffee.com/nonatomic" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
-
 ## What this is
 
 `console-adventure-studio` is a tool for working with the JSON-shaped narrative configs that [`console-adventure`](https://github.com/PaulNonatomic/console-adventure) consumes.
@@ -99,6 +94,13 @@ npm run preview    # serve the build locally
 - [`console-adventure`](https://github.com/PaulNonatomic/console-adventure) for the `AdventureJson` type + `adventure.schema.json`
 
 No CSS framework — the UI styles inline against a small palette (`src/lib/theme.ts`) that mirrors `console-shell`'s `DEFAULT_THEME`, so the editor's chrome visually matches the runtime output.
+
+---
+
+## Support
+If you like my work then please consider showing your support for console-adventure-studio by giving the repo a star or buying me a brew
+<br><br>
+<a href="https://www.buymeacoffee.com/nonatomic" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 ---
 
