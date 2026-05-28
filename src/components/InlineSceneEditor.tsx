@@ -44,7 +44,8 @@ import {
 	updateScene,
 	updateChoice,
 	addChoice,
-	deleteChoice
+	deleteChoice,
+	deleteScene
 } from '../lib/edit';
 
 interface Props {
@@ -56,6 +57,13 @@ interface Props {
 	onExpand: () => void;
 	/** "▶ play from here" — boots the playtest at this scene without mutating the document's start. */
 	onPlayFromHere: () => void;
+	/**
+	 * Called after the user confirms a scene deletion. The
+	 * parent is expected to also clear `selectedScene` so this
+	 * card unmounts. We don't do it here because the parent owns
+	 * selection state.
+	 */
+	onSceneDeleted: () => void;
 }
 
 const CARD_WIDTH = 520;
@@ -70,7 +78,8 @@ export function InlineSceneEditor({
 	onJsonChange,
 	onClose,
 	onExpand,
-	onPlayFromHere
+	onPlayFromHere,
+	onSceneDeleted
 }: Props) {
 	const rf = useReactFlow();
 	// Subscribe to the React Flow viewport transform so this
@@ -368,7 +377,11 @@ export function InlineSceneEditor({
 				</div>
 			</div>
 
-			{/* Footer — + choice (ghost) and ▶ play from here (cyan stub). */}
+			{/* Footer — + choice, delete scene, ▶ play from here.
+			    Delete is gated: the start scene can't be deleted
+			    while it's still the start (the engine would have
+			    nowhere to begin). The button stays visible but
+			    dimmed so the constraint is discoverable. */}
 			<div
 				style={{
 					borderTop: `1px solid ${PANEL_BORDER}`,
@@ -379,12 +392,27 @@ export function InlineSceneEditor({
 					gap: 8
 				}}
 			>
-				<FooterButton
-					color={AMBER}
-					onClick={() => onJsonChange(addChoice(json, sceneId))}
-				>
-					+ choice
-				</FooterButton>
+				<div style={{ display: 'flex', gap: 8 }}>
+					<FooterButton
+						color={AMBER}
+						onClick={() => onJsonChange(addChoice(json, sceneId))}
+					>
+						+ choice
+					</FooterButton>
+					<FooterButton
+						color={MAGENTA}
+						disabled={isStart}
+						onClick={() => {
+							if (isStart) return;
+							if (window.confirm(`Delete scene "${sceneId}"? Any choices pointing here will be rewired to finish (null).`)) {
+								onJsonChange(deleteScene(json, sceneId));
+								onSceneDeleted();
+							}
+						}}
+					>
+						{isStart ? '🗑 delete (set start first)' : '🗑 delete scene'}
+					</FooterButton>
+				</div>
 				<FooterButton color={CYAN} onClick={onPlayFromHere}>
 					▶ play from here
 				</FooterButton>

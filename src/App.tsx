@@ -81,7 +81,7 @@ import { computeMaxScore } from 'console-adventure';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';
-import { updateChoice, addSceneFromChoice } from './lib/edit';
+import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
@@ -362,6 +362,32 @@ function AppInner() {
 		return () => window.removeEventListener('keydown', onKey);
 	}, []);
 
+	// Keyboard shortcut: Delete / Backspace deletes the
+	// currently-selected scene, with a confirmation. Skips when
+	// focus is in any editable field — Backspace inside the
+	// heading textarea must keep deleting characters, not
+	// torching the scene the author is typing into.
+	const handleDeleteSelectedRef = useRef<() => void>(() => {});
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+			const target = e.target as HTMLElement | null;
+			const tag = target?.tagName;
+			if (
+				tag === 'INPUT' ||
+				tag === 'TEXTAREA' ||
+				tag === 'SELECT' ||
+				target?.isContentEditable
+			) {
+				return;
+			}
+			e.preventDefault();
+			handleDeleteSelectedRef.current();
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, []);
+
 	const handleNodeClick = useCallback(
 		(_e: React.MouseEvent, node: Node) => {
 			if (prevSelectedRef.current === node.id) {
@@ -435,6 +461,39 @@ function AppInner() {
 		handleAutoLayoutRef.current = handleAutoLayout;
 	}, [handleAutoLayout]);
 
+	/**
+	 * Delete the currently-selected scene, with a confirmation.
+	 * Bailout cases — silently no-op rather than nag:
+	 *   - No scene is selected.
+	 *   - The selected scene is the document's start (the engine
+	 *     would have nowhere to begin). The inline editor's
+	 *     delete button shows a "set start first" hint for this
+	 *     case; from the keyboard there's no UI surface to
+	 *     explain it, so silence is the right call.
+	 *
+	 * Also clears the selection so the inline editor unmounts
+	 * cleanly after deletion.
+	 */
+	const handleDeleteSelected = useCallback(() => {
+		if (!selectedScene) return;
+		if (json.start === selectedScene) return;
+		if (
+			!window.confirm(
+				`Delete scene "${selectedScene}"? Any choices pointing here will be rewired to finish (null).`
+			)
+		) {
+			return;
+		}
+		const next = deleteScene(json, selectedScene);
+		setJson(next);
+		setSelectedScene(null);
+		setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
+	}, [selectedScene, json, setRfNodes]);
+
+	useEffect(() => {
+		handleDeleteSelectedRef.current = handleDeleteSelected;
+	}, [handleDeleteSelected]);
+
 	// (Dev-only zoom tuning logger removed in Move 01 — the
 	// DEFAULT_ZOOM value is now settled at 1.056 and the
 	// console spam is no longer earning its keep.)
@@ -492,16 +551,29 @@ function AppInner() {
 			const sourceId = conn.fromNode?.id;
 			const i = Number(conn.fromHandle?.id?.replace('c-', ''));
 			if (!sourceId || Number.isNaN(i)) return;
+			// Drop-to-create can fire on accidental drags (release
+			// too early, miss the target node). Confirm before
+			// committing so a stray drag doesn't pollute the
+			// adventure with empty stub scenes. The wording names
+			// the source choice so the author knows what they're
+			// agreeing to.
 			setJson((prev) => {
+				const choiceLabel = prev.scenes[sourceId]?.choices[i]?.label ?? '(choice)';
+				const ok = window.confirm(
+					`Create a new scene wired up to "${choiceLabel}" (choice ${i + 1} of "${sourceId}")?`
+				);
+				if (!ok) return prev;
 				const { json: nextJson, id } = addSceneFromChoice(prev, sourceId, i);
 				// Defer the selection update so it lands after the
 				// effect that rebuilds the graph — otherwise the
 				// node we just created hasn't been emitted yet and
 				// React Flow drops the `selected` flag.
-				queueMicrotask(() => setSelectedScene(id));
+				queueMicrotask(() => {
+					setSelectedScene(id);
+					setJsonVersion((v) => v + 1);
+				});
 				return nextJson;
 			});
-			setJsonVersion((v) => v + 1);
 		},
 		[]
 	);
@@ -739,6 +811,10 @@ function AppInner() {
 					}}
 					onExpand={() => setInlineCollapsed(true)}
 					onPlayFromHere={() => handlePlayFromHere(selectedScene)}
+					onSceneDeleted={() => {
+						setSelectedScene(null);
+						setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
+					}}
 				/>
 			)}
 
@@ -776,6 +852,14 @@ function AppInner() {
 						onConnect={handleConnect}
 						onConnectEnd={handleConnectEnd}
 						onNodeClick={handleNodeClick}
+						// Disable React Flow's built-in deletion key —
+						// it would remove the node from the rfNodes
+						// state without touching `json`, so the next
+						// rebuild would resurrect it. Our own Delete /
+						// Backspace handler (in App's useEffect) goes
+						// through `deleteScene` instead so json stays
+						// the source of truth.
+						deleteKeyCode={null}
 						connectionLineStyle={{
 							stroke: PHOSPHOR,
 							strokeWidth: 2,
@@ -870,8 +954,8 @@ function AppInner() {
 							pointerEvents: 'none'
 						}}
 					>
-						scroll to zoom · drag to pan · click a scene to edit inline ·
-						click again to deselect
+						scroll to zoom · drag to pan · click a scene to edit ·
+						click again to deselect · Del to delete · Shift+L to tidy
 					</div>
 
 					{/* Restore-card chip — visible only when the user
