@@ -74,7 +74,7 @@ import { Toolbar } from './components/Toolbar';
 import { RightPanel, type Tab } from './components/RightPanel';
 import { SceneNode } from './components/SceneNode';
 import { FinishNode } from './components/FinishNode';
-import { MergedEdge } from './components/MergedEdge';
+import { ChoiceEdge } from './components/ChoiceEdge';
 import { LoadDialog } from './components/LoadDialog';
 import { buildGraph, FINISH_NODE_ID, ARROW_MARKER_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
@@ -166,7 +166,7 @@ const nodeTypes = { scene: SceneNode, finish: FinishNode };
 // Custom edge types. Lifted to module scope (matches nodeTypes
 // pattern above) so React Flow doesn't see a new reference on
 // every render and complain via its console warning.
-const edgeTypes = { merged: MergedEdge };
+const edgeTypes = { choice: ChoiceEdge };
 
 /**
  * Outermost wrapper. The Provider is mounted here so any
@@ -364,6 +364,8 @@ function AppInner() {
 			} else {
 				setSelectedScene(node.id);
 			}
+			const edge: Edge | undefined = params.edges[0];
+			setSelectedEdgeId(edge?.id ?? null);
 		},
 		[]
 	);
@@ -381,6 +383,17 @@ function AppInner() {
 	useEffect(() => {
 		prevSelectedRef.current = selectedScene;
 	}, [selectedScene]);
+
+	// Track which edge (if any) is currently selected — mirrors
+	// `selectedScene` for the nodes side. We need our own copy
+	// (rather than reading from rfEdges every time) because the
+	// delete shortcut needs synchronous access to the choice
+	// coords for the confirmation prompt.
+	const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+	const prevSelectedEdgeRef = useRef<string | null>(null);
+	useEffect(() => {
+		prevSelectedEdgeRef.current = selectedEdgeId;
+	}, [selectedEdgeId]);
 
 	// Keyboard shortcut: Shift+L re-runs the auto layout. Skips
 	// when the user is typing in an input/textarea so the
@@ -444,6 +457,24 @@ function AppInner() {
 			}
 		},
 		[setRfNodes]
+	);
+
+	/**
+	 * Edge click toggle — same shape as the node-click toggle.
+	 * If the user clicked the same edge twice in a row, clear
+	 * every edge's `selected` flag and reset our tracking state.
+	 * Otherwise let the default selection settle in: the click
+	 * sets `selected: true` on the clicked edge, and our
+	 * onSelectionChange handler picks it up.
+	 */
+	const handleEdgeClick = useCallback(
+		(_e: React.MouseEvent, edge: Edge) => {
+			if (prevSelectedEdgeRef.current === edge.id) {
+				setRfEdges((prev) => prev.map((e) => ({ ...e, selected: false })));
+				setSelectedEdgeId(null);
+			}
+		},
+		[setRfEdges]
 	);
 
 	// React Flow instance — used by the auto-layout button to
@@ -526,6 +557,44 @@ function AppInner() {
 	 * cleanly after deletion.
 	 */
 	const handleDeleteSelected = useCallback(async () => {
+		// Edge selection takes priority. "Delete the connection"
+		// = rewire that choice's `next` to null (terminal). The
+		// choice itself stays so the author keeps the label and
+		// points — they just need to be rewired (or left as a
+		// finish-leading option).
+		if (selectedEdgeId) {
+			const edge = rfEdges.find((e) => e.id === selectedEdgeId);
+			const data = edge?.data as
+				| { sceneId?: string; choiceIndex?: number }
+				| undefined;
+			if (!edge || data?.sceneId === undefined || data.choiceIndex === undefined) {
+				return;
+			}
+			const fromScene = data.sceneId;
+			const choiceIndex = data.choiceIndex;
+			const choice = json.scenes[fromScene]?.choices[choiceIndex];
+			if (!choice) return;
+			const ok = await confirm({
+				title: 'Delete connection',
+				message: (
+					<>
+						Remove the link from <strong>{fromScene}</strong> choice{' '}
+						<strong>
+							{choiceIndex + 1}) {choice.label}
+						</strong>{' '}
+						→ <strong>{edge.target}</strong>? The choice stays in the scene
+						but is rewired to <strong>finish</strong> (null).
+					</>
+				),
+				confirmLabel: 'Delete connection',
+				tone: 'danger'
+			});
+			if (!ok) return;
+			setJson(updateChoice(json, fromScene, choiceIndex, { next: null }));
+			setRfEdges((prev) => prev.map((e) => ({ ...e, selected: false })));
+			setSelectedEdgeId(null);
+			return;
+		}
 		if (!selectedScene) return;
 		if (json.start === selectedScene) return;
 		const ok = await confirm({
@@ -544,7 +613,15 @@ function AppInner() {
 		setJson(next);
 		setSelectedScene(null);
 		setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
-	}, [selectedScene, json, setRfNodes, confirm]);
+	}, [
+		selectedScene,
+		selectedEdgeId,
+		rfEdges,
+		json,
+		setRfNodes,
+		setRfEdges,
+		confirm
+	]);
 
 	useEffect(() => {
 		handleDeleteSelectedRef.current = handleDeleteSelected;
@@ -923,6 +1000,7 @@ function AppInner() {
 						onConnect={handleConnect}
 						onConnectEnd={handleConnectEnd}
 						onNodeClick={handleNodeClick}
+						onEdgeClick={handleEdgeClick}
 						// Disable React Flow's built-in deletion key —
 						// it would remove the node from the rfNodes
 						// state without touching `json`, so the next
@@ -1026,8 +1104,9 @@ function AppInner() {
 							pointerEvents: 'none'
 						}}
 					>
-						scroll to zoom · drag to pan · click a scene to edit ·
-						click again to deselect · Del to delete · Shift+L to tidy
+						scroll to zoom · drag to pan · click scenes or connections to
+						select · click again to deselect · Del to delete · Shift+L to
+						tidy
 					</div>
 
 					{/* Restore-card chip — visible only when the user

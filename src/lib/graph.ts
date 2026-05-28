@@ -15,8 +15,8 @@
  * just produces *unpositioned* nodes/edges.
  */
 import type { Node, Edge } from '@xyflow/react';
-import type { AdventureJson, Scene } from 'console-adventure';
-import { AMBER, CYAN, PANEL_BORDER, VOID } from './theme';
+import type { AdventureJson } from 'console-adventure';
+import { AMBER, CYAN, PANEL_BORDER } from './theme';
 import { validate } from './validate';
 import type { FlowDirection } from './flowDirection';
 
@@ -25,20 +25,12 @@ import type { FlowDirection } from './flowDirection';
 // graph. React Flow keeps references; lifting them here both
 // trims allocations and gives a single place to tune edge
 // appearance.
-const EDGE_LABEL_STYLE = {
-	fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
-	fontSize: 10,
-	fill: AMBER,
-	fontWeight: 600
-} as const;
-
-const EDGE_LABEL_BG_STYLE = {
-	fill: VOID,
-	fillOpacity: 0.85,
-	stroke: PANEL_BORDER,
-	strokeWidth: 1
-} as const;
-
+//
+// No edge labels -- the choice's text + points live in the
+// source node's choice row, and a label on the wire as well
+// just made the graph noisy at any zoom level. The wire itself
+// carries "this choice connects A → B"; the row is the source
+// of truth for what the choice says.
 const EDGE_STROKE_STYLE = { stroke: AMBER, strokeWidth: 1.5 } as const;
 /**
  * Style applied to edges along the taken playtest path. Cyan
@@ -73,9 +65,6 @@ const EDGE_STROKE_STYLE_DIM = {
  */
 export const ARROW_MARKER_ID = 'cas-arrow-base';
 const ARROW_MARKER = ARROW_MARKER_ID;
-
-const EDGE_LABEL_BG_PADDING: [number, number] = [6, 4];
-const EDGE_LABEL_BG_RADIUS = 4;
 
 export interface SceneNodeData extends Record<string, unknown> {
 	sceneId: string;
@@ -184,110 +173,39 @@ export function buildGraph(
 			} satisfies SceneNodeData
 		});
 
-		// Group choices by their target scene so multiple choices
-		// from this scene that point at the same next scene
-		// collapse into a single visual wire. Without this, a
-		// scene with five choices that all loop back to a hub
-		// renders as five parallel amber wires — visually noisy
-		// and hard to read once a graph gets dense.
-		const choicesByTarget = new Map<
-			string,
-			Array<{ choiceIndex: number; choice: Scene['choices'][number] }>
-		>();
-		scene.choices.forEach((choice, i) => {
+		// One edge per choice, every time. Parallel wires from N
+		// choices to the same target are now allowed -- the
+		// previous "collapse them into one bundle" treatment was
+		// confusing (the visual stopped mapping to the choice
+		// list one-for-one).
+		scene.choices.forEach((choice, choiceIndex) => {
 			const target = choice.next ?? FINISH_NODE_ID;
-			const group = choicesByTarget.get(target);
-			if (group) {
-				group.push({ choiceIndex: i, choice });
-			} else {
-				choicesByTarget.set(target, [{ choiceIndex: i, choice }]);
-			}
-		});
-
-		for (const [target, group] of choicesByTarget) {
 			// Edge style switches on the run:
-			//   - run active + ANY constituent taken → cyan thick
-			//   - run active + none taken → dim dashed
+			//   - run active + this edge taken → cyan thick
+			//   - run active + not taken → dim dashed
 			//   - no run → default amber
-			const anyTaken = group.some(({ choiceIndex }) =>
-				takenEdgeSet.has(`${sceneId}-${choiceIndex}`)
-			);
+			const taken = takenEdgeSet.has(`${sceneId}-${choiceIndex}`);
 			const style = hasActiveRun
-				? anyTaken
+				? taken
 					? EDGE_STROKE_STYLE_TAKEN
 					: EDGE_STROKE_STYLE_DIM
 				: EDGE_STROKE_STYLE;
-
-			if (group.length === 1) {
-				// Solo edge — keep the per-choice id + handle so
-				// drag-to-wire and the v12 sourceHandle routing
-				// still target the correct row.
-				const { choiceIndex, choice } = group[0];
-				const points = choice.points ?? 0;
-				edges.push({
-					id: `${sceneId}-${choiceIndex}-${target}`,
-					source: sceneId,
-					sourceHandle: `c-${choiceIndex}`,
-					target,
-					label: `${choiceIndex + 1}) ${truncate(choice.label, 28)}${
-						points ? `  +${points}` : ''
-					}`,
-					labelBgPadding: EDGE_LABEL_BG_PADDING,
-					labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,
-					labelStyle: EDGE_LABEL_STYLE,
-					labelBgStyle: EDGE_LABEL_BG_STYLE,
-					style,
-					markerEnd: ARROW_MARKER
-				});
-			} else {
-				// Merged edge — one visual wire carrying all the
-				// choices that share this target. Per-choice
-				// labels join with " · " so the author still sees
-				// which choices are bundled. Truncate harder when
-				// merged so the combined label doesn't run off
-				// across the graph.
-				//
-				// `sourceHandle` anchors at the FIRST choice's
-				// row outlet. We can only point at one row per
-				// edge; choosing the first keeps the wire close
-				// to where the choices begin in the source node.
-				// Per-choice drag-to-wire still works because the
-				// underlying <Handle> elements on every row are
-				// always present, regardless of which edge is
-				// drawn from them.
-				const first = group[0];
-				const segments = group.map(({ choiceIndex, choice }) => {
-					const pts = choice.points ?? 0;
-					return `${choiceIndex + 1}) ${truncate(choice.label, 14)}${
-						pts ? ` +${pts}` : ''
-					}`;
-				});
-				edges.push({
-					id: `${sceneId}->${target}#merged`,
-					source: sceneId,
-					// Anchor the React-Flow-tracked source at the
-					// first row so default labelX/labelY computation
-					// has somewhere to start. The custom edge type
-					// uses `data.sourceHandleIds` to draw spokes from
-					// EVERY participating row, not just this one.
-					sourceHandle: `c-${first.choiceIndex}`,
-					target,
-					type: 'merged',
-					data: {
-						sourceHandleIds: group.map(
-							({ choiceIndex }) => `c-${choiceIndex}`
-						)
-					},
-					label: segments.join('  ·  '),
-					labelBgPadding: EDGE_LABEL_BG_PADDING,
-					labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,
-					labelStyle: EDGE_LABEL_STYLE,
-					labelBgStyle: EDGE_LABEL_BG_STYLE,
-					style,
-					markerEnd: ARROW_MARKER
-				});
-			}
-		}
+			edges.push({
+				id: `${sceneId}-${choiceIndex}-${target}`,
+				source: sceneId,
+				// Choice-addressed source handle — must match the
+				// `id` set on the per-choice <Handle> in SceneNode.
+				sourceHandle: `c-${choiceIndex}`,
+				target,
+				type: 'choice',
+				// Carry the choice coordinates through `data` so
+				// the keyboard delete shortcut can find which
+				// choice to rewire when an edge is selected.
+				data: { sceneId, choiceIndex },
+				style,
+				markerEnd: ARROW_MARKER
+			});
+		});
 	}
 
 	// Synthetic finish node, only added if at least one choice
@@ -308,6 +226,3 @@ export function buildGraph(
 	return { nodes, edges };
 }
 
-function truncate(s: string, n: number): string {
-	return s.length <= n ? s : s.slice(0, n - 1) + '…';
-}
