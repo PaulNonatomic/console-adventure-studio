@@ -250,12 +250,12 @@ export default function App() {
 						fitViewOptions={{
 							nodes: focusNodeIds.map((id) => ({ id })),
 							padding: 0.15,
-							// 0.9 instead of 1.0 — gives the start node and
-							// its direct successors a touch more breathing
-							// room in the default view, especially when the
-							// user has resized the right panel wider and
-							// the canvas viewport got narrower.
-							minZoom: 0.9,
+							// 0.8 — gives the start node and its direct
+							// successors enough breathing room that the
+							// edge labels between layers don't crowd, and
+							// leaves room for the third layer to peek into
+							// the viewport as context.
+							minZoom: 0.8,
 							maxZoom: 1.6
 						}}
 						minZoom={0.2}
