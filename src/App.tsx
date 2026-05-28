@@ -250,12 +250,10 @@ export default function App() {
 						fitViewOptions={{
 							nodes: focusNodeIds.map((id) => ({ id })),
 							padding: 0.15,
-							// 0.8 — gives the start node and its direct
-							// successors enough breathing room that the
-							// edge labels between layers don't crowd, and
-							// leaves room for the third layer to peek into
-							// the viewport as context.
-							minZoom: 0.8,
+							// 0.7 — pulls back enough that more of the graph
+							// is in view from the start. User can still zoom
+							// in via the controls if they need detail.
+							minZoom: 0.7,
 							maxZoom: 1.6
 						}}
 						minZoom={0.2}
