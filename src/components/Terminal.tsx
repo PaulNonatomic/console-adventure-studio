@@ -224,6 +224,17 @@ export function Terminal({ json }: Props) {
 function TerminalLine({ line }: { line: LogLine }) {
 	const segments = line.message.split('%c');
 
+	// Empty `console.log('')` calls — the engine emits these
+	// intentionally between sections (heading → narration →
+	// choices → prompt) for paragraph breaks. An empty <div>
+	// collapses to zero height, so render a non-breaking space
+	// so the browser gives the line a full line-height of
+	// vertical room. Without this, the paragraph breaks
+	// vanish and the output reads as one wall of text.
+	if (line.message === '') {
+		return <div>{' '}</div>;
+	}
+
 	// Find the leading whitespace of the first non-empty segment.
 	let leadChars = 0;
 	const firstContent = segments.find((s) => s.length > 0);
