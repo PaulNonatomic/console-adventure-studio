@@ -81,18 +81,29 @@ import { createSave, storageAvailable } from './lib/storage';
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
 
 /**
- * Custom arrow marker that terminates the edge line at the
- * base of the triangle rather than the centre. Built-in
- * `arrowclosed` puts `refX` at the centre of the marker, so
- * the edge line draws all the way through the interior of the
- * arrowhead and visually crosses it — looks like the line is
- * stabbing the arrow rather than terminating in it. Custom
- * marker with `refX="1"` (a hair inside the base so the line
- * meets the triangle cleanly without a 1px gap).
+ * Custom arrow marker.
  *
- * Rendered as a zero-size SVG sibling of the React Flow root
- * — its only job is to provide `<defs>` that other SVGs in
- * the document can reference by `url(#id)`.
+ * Geometry:
+ *   - Triangle path: M 0 0 L 10 5 L 0 10 z — tip at x=10
+ *   - refX="10" — the tip is the anchor point that sits on
+ *     the line endpoint. The base (x=0) extends backward
+ *     along the line, toward the source node, into the gap
+ *     between nodes. So the visible arrow sits in the
+ *     inter-node gap, tip kissing the target node's handle.
+ *   - markerWidth/Height kept small so the triangle's
+ *     interior is barely wider than the edge stroke — the
+ *     line and the triangle visually merge along the line's
+ *     axis without an obvious "line stabbing the arrow"
+ *     artifact.
+ *
+ * Earlier incarnations:
+ *   - React Flow built-in `arrowclosed` was the same geometry
+ *     but at default size, which made the interior wide enough
+ *     that the line through the centre was very visible.
+ *   - Custom with refX=1 had the triangle extending FORWARD
+ *     past the line endpoint, which put it inside the target
+ *     node's area — node z-order covered the triangle and
+ *     made the arrows look like they disappeared.
  */
 function MarkerDefs() {
 	return (
@@ -110,10 +121,10 @@ function MarkerDefs() {
 				<marker
 					id={ARROW_MARKER_ID}
 					viewBox="0 0 10 10"
-					refX="1"
+					refX="10"
 					refY="5"
-					markerWidth="12"
-					markerHeight="12"
+					markerWidth="9"
+					markerHeight="9"
 					orient="auto"
 				>
 					<path d="M 0 0 L 10 5 L 0 10 z" fill={AMBER} />
