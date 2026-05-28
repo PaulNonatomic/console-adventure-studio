@@ -138,9 +138,17 @@ export default function App() {
 						nodeTypes={nodeTypes}
 						onSelectionChange={handleSelectionChange}
 						fitView
-						fitViewOptions={{ padding: 0.15 }}
+						// `fitView` auto-fits every node into the viewport,
+						// which for the foundry's 7-node × 6-layer graph
+						// lands around 0.5x — readable but loose. The
+						// `minZoom` here is a floor for the auto-fit
+						// specifically (not the canvas overall), so the
+						// default view comes in tighter while a player who
+						// loads a larger script still gets adaptive fitting
+						// down to the canvas-level minZoom.
+						fitViewOptions={{ padding: 0.12, minZoom: 0.85 }}
 						minZoom={0.2}
-						maxZoom={1.8}
+						maxZoom={2}
 						proOptions={{ hideAttribution: true }}
 						style={{ background: VOID }}
 					>
