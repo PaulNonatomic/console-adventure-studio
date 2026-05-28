@@ -49,13 +49,23 @@ import {
 import '@xyflow/react/dist/style.css';
 
 /**
- * Zoom config — extracted as constants so the dev-tuning log
- * below can reference the same values that fitView is using.
- * Adjust these and the log + the canvas behaviour both move
- * together.
+ * Zoom config.
+ *
+ * `DEFAULT_ZOOM` is the exact level fitView lands at on load —
+ * both min and max in fitViewOptions are set to this same
+ * value so React Flow can't pick anything else when it
+ * auto-fits. (Previous incarnation set min=1.056, max=1.6 —
+ * fitView's "natural" fit for the start + successors was
+ * above 1.6, so it clamped to the max ceiling instead of the
+ * tuned floor.)
+ *
+ * `CANVAS_MIN_ZOOM` / `CANVAS_MAX_ZOOM` are the wider bounds
+ * the user can scroll-wheel / button-zoom INSIDE after the
+ * initial fit — they don't affect the default view.
  */
-const DEFAULT_MIN_ZOOM = 1.056;
-const DEFAULT_MAX_ZOOM = 1.6;
+const DEFAULT_ZOOM = 1.056;
+const CANVAS_MIN_ZOOM = 0.2;
+const CANVAS_MAX_ZOOM = 2;
 
 import { Toolbar } from './components/Toolbar';
 import { RightPanel } from './components/RightPanel';
@@ -122,12 +132,12 @@ export default function App() {
 		[]
 	);
 
-	// Zoom tuning logger. While iterating on the default zoom
-	// floor, log every meaningful zoom change so a developer
-	// can pan/zoom to a value that looks right, then copy it
-	// back into `DEFAULT_MIN_ZOOM`. Throttled by `> 0.005`
-	// delta so a drag doesn't spam the console.
-	// Once the default settles this whole block can come out.
+	// Zoom tuning logger. While iterating, log every meaningful
+	// zoom change so a developer can pan/zoom to a value that
+	// looks right, then copy it back into `DEFAULT_ZOOM`.
+	// Throttled by `> 0.005` delta so a drag doesn't spam the
+	// console. Once the default settles, this whole block (the
+	// ref, handler, and useEffect) can come out.
 	const lastLoggedZoomRef = useRef<number | null>(null);
 	const handleMove = useCallback((_: unknown, viewport: Viewport) => {
 		const z = viewport.zoom;
@@ -136,7 +146,7 @@ export default function App() {
 		lastLoggedZoomRef.current = z;
 		// eslint-disable-next-line no-console
 		console.log(
-			`%c[adventure-studio]%c zoom %c${z.toFixed(3)}%c · default minZoom ${DEFAULT_MIN_ZOOM} · maxZoom ${DEFAULT_MAX_ZOOM}`,
+			`%c[adventure-studio]%c zoom %c${z.toFixed(3)}%c · fitView locked to ${DEFAULT_ZOOM} · canvas range [${CANVAS_MIN_ZOOM}, ${CANVAS_MAX_ZOOM}]`,
 			'color: #C7F441; font-weight: bold;',
 			'color: #909090;',
 			'color: #F5A623; font-weight: bold;',
@@ -149,12 +159,14 @@ export default function App() {
 	useEffect(() => {
 		// eslint-disable-next-line no-console
 		console.log(
-			`%c[adventure-studio]%c canvas defaults — fitView minZoom %c${DEFAULT_MIN_ZOOM}%c, maxZoom %c${DEFAULT_MAX_ZOOM}%c. Zoom around to find a value, then update DEFAULT_MIN_ZOOM in App.tsx.`,
+			`%c[adventure-studio]%c fitView locks to zoom %c${DEFAULT_ZOOM}%c · user-zoom range [%c${CANVAS_MIN_ZOOM}%c, %c${CANVAS_MAX_ZOOM}%c]. Zoom around to find a value, then update DEFAULT_ZOOM in App.tsx.`,
 			'color: #C7F441; font-weight: bold;',
 			'color: #909090;',
 			'color: #F5A623; font-weight: bold;',
 			'color: #909090;',
-			'color: #F5A623; font-weight: bold;',
+			'color: #F5A623;',
+			'color: #909090;',
+			'color: #F5A623;',
 			'color: #909090;'
 		);
 	}, []);
@@ -298,16 +310,18 @@ export default function App() {
 						fitViewOptions={{
 							nodes: focusNodeIds.map((id) => ({ id })),
 							padding: 0.15,
-							// Tuning these? Watch the console log — the
-							// current zoom level is printed on every move
-							// so you can pan/zoom to a value that looks
-							// right, then update DEFAULT_MIN_ZOOM at the
-							// top of this file.
-							minZoom: DEFAULT_MIN_ZOOM,
-							maxZoom: DEFAULT_MAX_ZOOM
+							// Both min and max set to DEFAULT_ZOOM so
+							// fitView can't pick anything else — the
+							// "natural" fit for start + successors is
+							// usually higher than what reads well, so we
+							// clamp from above as well as below. The
+							// user-zoom range below stays wide so they can
+							// still zoom out/in via the controls.
+							minZoom: DEFAULT_ZOOM,
+							maxZoom: DEFAULT_ZOOM
 						}}
-						minZoom={0.2}
-						maxZoom={2}
+						minZoom={CANVAS_MIN_ZOOM}
+						maxZoom={CANVAS_MAX_ZOOM}
 						proOptions={{ hideAttribution: true }}
 						style={{ background: VOID }}
 					>
