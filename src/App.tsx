@@ -189,7 +189,20 @@ export default function App() {
 			return;
 		}
 		const built = buildGraph(json, maxScore);
-		setRfNodes(layoutGraph(built.nodes, built.edges, json.start));
+		const positioned = layoutGraph(built.nodes, built.edges, json.start);
+		// Carry over React Flow's `selected` flag from the
+		// previous nodes by id. Without this, every json edit
+		// (every keystroke in the heading / narration / etc.)
+		// drops fresh node objects with no selection state in —
+		// React Flow then fires `onSelectionChange` with an
+		// empty array, which sets selectedScene to null and
+		// bounces the user out of the editor view.
+		setRfNodes((prev) => {
+			const wasSelected = new Map(prev.map((n) => [n.id, !!n.selected]));
+			return positioned.map((n) =>
+				wasSelected.get(n.id) ? { ...n, selected: true } : n
+			);
+		});
 		setRfEdges(built.edges);
 	}, [json, maxScore, setRfNodes, setRfEdges]);
 
