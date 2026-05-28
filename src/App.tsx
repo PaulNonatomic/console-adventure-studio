@@ -32,7 +32,7 @@
  *     → key={jsonVersion} change forces ReactFlow remount
  *     → fitView re-runs focused on start + successors
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ReactFlow,
 	Background,
@@ -41,11 +41,21 @@ import {
 	type Node,
 	type Edge,
 	type OnSelectionChangeParams,
+	type Viewport,
 	BackgroundVariant,
 	useNodesState,
 	useEdgesState
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+
+/**
+ * Zoom config — extracted as constants so the dev-tuning log
+ * below can reference the same values that fitView is using.
+ * Adjust these and the log + the canvas behaviour both move
+ * together.
+ */
+const DEFAULT_MIN_ZOOM = 0.6;
+const DEFAULT_MAX_ZOOM = 1.6;
 
 import { Toolbar } from './components/Toolbar';
 import { RightPanel } from './components/RightPanel';
@@ -111,6 +121,43 @@ export default function App() {
 		},
 		[]
 	);
+
+	// Zoom tuning logger. While iterating on the default zoom
+	// floor, log every meaningful zoom change so a developer
+	// can pan/zoom to a value that looks right, then copy it
+	// back into `DEFAULT_MIN_ZOOM`. Throttled by `> 0.005`
+	// delta so a drag doesn't spam the console.
+	// Once the default settles this whole block can come out.
+	const lastLoggedZoomRef = useRef<number | null>(null);
+	const handleMove = useCallback((_: unknown, viewport: Viewport) => {
+		const z = viewport.zoom;
+		const prev = lastLoggedZoomRef.current;
+		if (prev !== null && Math.abs(z - prev) < 0.005) return;
+		lastLoggedZoomRef.current = z;
+		// eslint-disable-next-line no-console
+		console.log(
+			`%c[adventure-studio]%c zoom %c${z.toFixed(3)}%c · default minZoom ${DEFAULT_MIN_ZOOM} · maxZoom ${DEFAULT_MAX_ZOOM}`,
+			'color: #C7F441; font-weight: bold;',
+			'color: #909090;',
+			'color: #F5A623; font-weight: bold;',
+			'color: #909090;'
+		);
+	}, []);
+
+	// One-shot startup log so the configured defaults are
+	// visible even before the user moves the camera.
+	useEffect(() => {
+		// eslint-disable-next-line no-console
+		console.log(
+			`%c[adventure-studio]%c canvas defaults — fitView minZoom %c${DEFAULT_MIN_ZOOM}%c, maxZoom %c${DEFAULT_MAX_ZOOM}%c. Zoom around to find a value, then update DEFAULT_MIN_ZOOM in App.tsx.`,
+			'color: #C7F441; font-weight: bold;',
+			'color: #909090;',
+			'color: #F5A623; font-weight: bold;',
+			'color: #909090;',
+			'color: #F5A623; font-weight: bold;',
+			'color: #909090;'
+		);
+	}, []);
 
 	// Edits stream in from the editor panels via this handler.
 	// Default behaviour is "update in place" (no remount).
@@ -246,16 +293,18 @@ export default function App() {
 						onEdgesChange={onEdgesChange}
 						nodeTypes={nodeTypes}
 						onSelectionChange={handleSelectionChange}
+						onMove={handleMove}
 						fitView
 						fitViewOptions={{
 							nodes: focusNodeIds.map((id) => ({ id })),
 							padding: 0.15,
-							// 0.6 — pulls back further so larger scripts land
-							// with more context in frame at first load. Users
-							// can still zoom in via the controls (top-right)
-							// when they want to read a single node closely.
-							minZoom: 0.6,
-							maxZoom: 1.6
+							// Tuning these? Watch the console log — the
+							// current zoom level is printed on every move
+							// so you can pan/zoom to a value that looks
+							// right, then update DEFAULT_MIN_ZOOM at the
+							// top of this file.
+							minZoom: DEFAULT_MIN_ZOOM,
+							maxZoom: DEFAULT_MAX_ZOOM
 						}}
 						minZoom={0.2}
 						maxZoom={2}
