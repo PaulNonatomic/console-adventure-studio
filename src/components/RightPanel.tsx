@@ -9,32 +9,44 @@
  * Both tabs are rendered at all times (just hidden via CSS)
  * so the terminal's adventure state survives a tab switch.
  */
-import { useEffect, useState, type ReactNode } from 'react';
-import { Terminal } from './Terminal';
+import { useEffect, type ReactNode } from 'react';
+import { Terminal, type PlayState } from './Terminal';
 import { ScenePanel } from './ScenePanel';
 import { PANEL, PANEL_BORDER, PHOSPHOR, DIM, AMBER } from '../lib/theme';
 import { useResizable } from '../lib/useResizable';
 import type { AdventureJson } from 'console-adventure';
 
-type Tab = 'inspect' | 'play';
+export type Tab = 'inspect' | 'play';
 
 interface Props {
 	json: AdventureJson;
+	jsonVersion: number;
 	maxScore: number;
 	selectedSceneId: string | null;
+	playFrom: string | null;
+	playRequestId: number;
+	tab: Tab;
+	onTabChange: (t: Tab) => void;
 	onJsonChange: (next: AdventureJson, opts?: { remount?: boolean }) => void;
 	onSelectScene: (id: string | null) => void;
+	onPlayStateChange: (s: PlayState) => void;
+	onClearPlayFrom: () => void;
 }
 
 export function RightPanel({
 	json,
+	jsonVersion,
 	maxScore,
 	selectedSceneId,
+	playFrom,
+	playRequestId,
+	tab,
+	onTabChange,
 	onJsonChange,
-	onSelectScene
+	onSelectScene,
+	onPlayStateChange,
+	onClearPlayFrom
 }: Props) {
-	const [tab, setTab] = useState<Tab>('inspect');
-
 	// Auto-switch to the inspect tab whenever a scene gets
 	// selected on the graph. The user's intent in clicking a
 	// node is to see / edit that node — but the inspector is
@@ -44,10 +56,10 @@ export function RightPanel({
 	// selected; the switch only triggers on a non-null new id.
 	useEffect(() => {
 		if (selectedSceneId !== null && tab !== 'inspect') {
-			setTab('inspect');
+			onTabChange('inspect');
 		}
-		// `tab` deliberately excluded — including it would loop
-		// (switch sets tab, effect re-runs).
+		// `tab` / `onTabChange` deliberately excluded — including
+		// them would loop (the change triggers the effect again).
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedSceneId]);
 
@@ -98,7 +110,7 @@ export function RightPanel({
 				role="separator"
 			/>
 
-			<TabBar active={tab} onChange={setTab} />
+			<TabBar active={tab} onChange={onTabChange} />
 
 			<TabContent visible={tab === 'inspect'}>
 				<ScenePanel
@@ -111,7 +123,14 @@ export function RightPanel({
 			</TabContent>
 
 			<TabContent visible={tab === 'play'}>
-				<Terminal json={json} />
+				<Terminal
+					json={json}
+					jsonVersion={jsonVersion}
+					playFrom={playFrom}
+					playRequestId={playRequestId}
+					onClearPlayFrom={onClearPlayFrom}
+					onStateChange={onPlayStateChange}
+				/>
 			</TabContent>
 		</aside>
 	);

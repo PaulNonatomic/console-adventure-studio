@@ -70,7 +70,7 @@ const CANVAS_MIN_ZOOM = 0.2;
 const CANVAS_MAX_ZOOM = 2;
 
 import { Toolbar } from './components/Toolbar';
-import { RightPanel } from './components/RightPanel';
+import { RightPanel, type Tab } from './components/RightPanel';
 import { SceneNode } from './components/SceneNode';
 import { FinishNode } from './components/FinishNode';
 import { LoadDialog } from './components/LoadDialog';
@@ -84,6 +84,15 @@ import { updateChoice, addSceneFromChoice } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
+import type { PlayState } from './components/Terminal';
+
+const EMPTY_PLAYSTATE: PlayState = {
+	sceneId: null,
+	finished: false,
+	score: 0,
+	visited: [],
+	takenEdges: []
+};
 import { VOID, PHOSPHOR, MAGENTA, AMBER, DIM, PANEL, PANEL_BORDER } from './lib/theme';
 
 /**
@@ -182,6 +191,36 @@ function AppInner() {
 		setInlineCollapsed(false);
 	}, [selectedScene]);
 
+	// Move 03 — Playtest companion. The Terminal owns the actual
+	// `Adventure` instance; it surfaces live state up through
+	// `onStateChange` so the graph can mirror the run. We hold a
+	// `playFrom` override here so "▶ play from here" buttons on
+	// the inline editor can boot the playtest mid-graph without
+	// mutating the document's `start`.
+	const [playState, setPlayState] = useState<PlayState>(EMPTY_PLAYSTATE);
+	const [playFrom, setPlayFrom] = useState<string | null>(null);
+	const [playRequestId, setPlayRequestId] = useState(0);
+	const [rightTab, setRightTab] = useState<Tab>('inspect');
+
+	/**
+	 * "▶ play from here" — boot the playtest at a specific
+	 * scene, switch the right panel to the Play tab. The request
+	 * id bumps even if the scene id is the same as before so
+	 * Terminal's rebuild effect re-fires for a second click on
+	 * the same node (otherwise React's equality check on
+	 * `playFrom` skips the re-render entirely).
+	 */
+	const handlePlayFromHere = useCallback((sceneId: string) => {
+		setPlayFrom(sceneId);
+		setPlayRequestId((n) => n + 1);
+		setRightTab('play');
+	}, []);
+	// Pre-compute lookup sets to keep the graph-rebuild useEffect
+	// O(1) per node when it threads play flags through.
+	const visitedSet = useMemo(() => new Set(playState.visited), [playState.visited]);
+	const takenEdgeSet = useMemo(() => new Set(playState.takenEdges), [playState.takenEdges]);
+	const liveSceneId = playState.sceneId;
+
 	// Whether localStorage is usable in this browsing context.
 	// Resolved once on first render; passed through to the
 	// toolbar so save / load fade rather than silently no-op
@@ -217,15 +256,22 @@ function AppInner() {
 		initialGraph.edges
 	);
 
-	// Sync into React Flow's state on subsequent json edits
-	// (which don't bump jsonVersion / cause a remount).
+	// Sync into React Flow's state on subsequent json edits or
+	// play-state changes (neither bumps jsonVersion / causes a
+	// remount). Play-state changes flow `isLive` / `isVisited`
+	// into each node's data, and re-style edges so the taken
+	// path renders cyan — purely visual, no layout impact.
 	const isFirstRenderRef = useRef(true);
 	useEffect(() => {
 		if (isFirstRenderRef.current) {
 			isFirstRenderRef.current = false;
 			return;
 		}
-		const built = buildGraph(json, maxScore);
+		const built = buildGraph(json, maxScore, {
+			liveSceneId,
+			visited: visitedSet,
+			takenEdges: takenEdgeSet
+		});
 		const positioned = layoutGraph(built.nodes, built.edges, json.start);
 		// Carry over React Flow's `selected` flag from the
 		// previous nodes by id. Without this, every json edit
@@ -241,7 +287,7 @@ function AppInner() {
 			);
 		});
 		setRfEdges(built.edges);
-	}, [json, maxScore, setRfNodes, setRfEdges]);
+	}, [json, maxScore, liveSceneId, visitedSet, takenEdgeSet, setRfNodes, setRfEdges]);
 
 	const focusNodeIds = useMemo(() => {
 		const successors =
@@ -530,6 +576,7 @@ function AppInner() {
 						setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
 					}}
 					onExpand={() => setInlineCollapsed(true)}
+					onPlayFromHere={() => handlePlayFromHere(selectedScene)}
 				/>
 			)}
 
@@ -637,10 +684,17 @@ function AppInner() {
 
 				<RightPanel
 					json={json}
+					jsonVersion={jsonVersion}
 					maxScore={maxScore}
 					selectedSceneId={selectedScene}
+					playFrom={playFrom}
+					playRequestId={playRequestId}
+					tab={rightTab}
+					onTabChange={setRightTab}
 					onJsonChange={handleJsonChange}
 					onSelectScene={setSelectedScene}
+					onPlayStateChange={setPlayState}
+					onClearPlayFrom={() => setPlayFrom(null)}
 				/>
 			</div>
 		</div>

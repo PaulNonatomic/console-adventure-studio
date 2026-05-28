@@ -12,7 +12,7 @@
  */
 import { memo, type ReactNode } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, MAGENTA, TEXT, DIM } from '../lib/theme';
+import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, MAGENTA, CYAN, TEXT, DIM } from '../lib/theme';
 import type { SceneNodeData } from '../lib/graph';
 
 /**
@@ -24,16 +24,27 @@ import type { SceneNodeData } from '../lib/graph';
  */
 function SceneNodeImpl({ data, selected }: NodeProps) {
 	const d = data as SceneNodeData;
-	// Border priority: selected > unreachable (magenta warning) >
-	// start > default. Selection should always win visually so
-	// the user can see what they're editing.
-	const borderColor = selected
+	// Border priority: live (playtest) > selected > unreachable
+	// (magenta warning) > start > default. Live wins over selected
+	// because seeing where the playtest is matters more than the
+	// edit cursor when both apply.
+	const borderColor = d.isLive
+		? CYAN
+		: selected
 		? AMBER
 		: d.isUnreachable
 		? MAGENTA
 		: d.isStart
 		? MAGENTA
 		: PANEL_BORDER;
+	// Box shadow: live gets a cyan glow + outer ring; selected
+	// gets a faint amber ring; visited nodes have no shadow but
+	// dim their content with opacity below.
+	const boxShadow = d.isLive
+		? `0 0 0 4px ${CYAN}22, 0 0 32px ${CYAN}55`
+		: selected
+		? `0 0 0 4px ${AMBER}22`
+		: '0 2px 8px rgba(0,0,0,0.4)';
 	return (
 		<div
 			style={{
@@ -44,11 +55,10 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 				width: 300,
 				fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
 				color: TEXT,
-				boxShadow: selected
-					? `0 0 0 4px ${AMBER}22`
-					: '0 2px 8px rgba(0,0,0,0.4)',
-				transition: 'border-color 120ms, box-shadow 120ms',
-				position: 'relative'
+				boxShadow,
+				transition: 'border-color 120ms, box-shadow 120ms, opacity 120ms',
+				position: 'relative',
+				opacity: d.isVisited ? 0.62 : 1
 			}}
 		>
 			{/* Top-right validation badges. Stacked horizontally
@@ -91,7 +101,36 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 			    layered top-down auto-layout. */}
 			<Handle type="target" position={Position.Top} style={{ background: AMBER }} />
 
-			{d.isStart && (
+			{/* Top-of-card status tag — live > visited > start.
+			    Only one is shown at a time; live wins because the
+			    playtest cursor is the most relevant signal. */}
+			{d.isLive ? (
+				<div
+					style={{
+						display: 'inline-block',
+						fontSize: 9,
+						fontWeight: 700,
+						letterSpacing: '0.1em',
+						color: CYAN,
+						marginBottom: 4
+					}}
+				>
+					▶ YOU ARE HERE
+				</div>
+			) : d.isVisited ? (
+				<div
+					style={{
+						display: 'inline-block',
+						fontSize: 9,
+						fontWeight: 700,
+						letterSpacing: '0.1em',
+						color: CYAN,
+						marginBottom: 4
+					}}
+				>
+					✓ VISITED
+				</div>
+			) : d.isStart ? (
 				<div
 					style={{
 						display: 'inline-block',
@@ -104,7 +143,7 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 				>
 					▶ START
 				</div>
-			)}
+			) : null}
 
 			<div
 				style={{

@@ -16,7 +16,7 @@
  */
 import type { Node, Edge } from '@xyflow/react';
 import type { AdventureJson } from 'console-adventure';
-import { AMBER, PANEL_BORDER, VOID } from './theme';
+import { AMBER, CYAN, PANEL_BORDER, VOID } from './theme';
 import { validate } from './validate';
 
 // Static edge-styling constants, lifted to module scope so we
@@ -39,6 +39,23 @@ const EDGE_LABEL_BG_STYLE = {
 } as const;
 
 const EDGE_STROKE_STYLE = { stroke: AMBER, strokeWidth: 1.5 } as const;
+/**
+ * Style applied to edges along the taken playtest path. Cyan
+ * matches the live-scene highlight on nodes so the eye can
+ * follow the run as one continuous trail across the graph.
+ */
+const EDGE_STROKE_STYLE_TAKEN = { stroke: CYAN, strokeWidth: 2 } as const;
+/**
+ * Style applied to edges that have NOT been taken once a
+ * playtest is in progress. Dimmed and dashed so the taken path
+ * pops; without this, every edge stays amber and the cyan path
+ * gets visually lost.
+ */
+const EDGE_STROKE_STYLE_DIM = {
+	stroke: PANEL_BORDER,
+	strokeWidth: 1,
+	strokeDasharray: '4 4'
+} as const;
 
 /**
  * Custom arrow marker referenced by ID. React Flow's
@@ -80,6 +97,28 @@ export interface SceneNodeData extends Record<string, unknown> {
 	hasMissingTarget: boolean;
 	/** Number of choices across all scenes that point at this one. */
 	inDegree: number;
+	/**
+	 * Playtest companion flags. `isLive` = the scene the playtest
+	 * is currently in. `isVisited` = a scene the playtest has
+	 * passed through earlier in the run. Both false when no
+	 * playtest is running. SceneNode renders these as a cyan
+	 * glow + "▶ YOU ARE HERE" / "✓ VISITED" tags.
+	 */
+	isLive: boolean;
+	isVisited: boolean;
+}
+
+/**
+ * Playtest state threaded into `buildGraph` so node + edge
+ * styling can mirror the current run. All optional — when no
+ * playtest is in progress (or no override is supplied), graphs
+ * build with their default amber styling.
+ */
+export interface PlayHighlight {
+	liveSceneId: string | null;
+	visited: Set<string>;
+	/** Edge ids on the taken path, formatted `${sceneId}-${choiceIndex}`. */
+	takenEdges: Set<string>;
 }
 
 export interface FinishNodeData extends Record<string, unknown> {
@@ -89,7 +128,11 @@ export interface FinishNodeData extends Record<string, unknown> {
 
 export const FINISH_NODE_ID = '__finish__';
 
-export function buildGraph(json: AdventureJson, maxScore: number): {
+export function buildGraph(
+	json: AdventureJson,
+	maxScore: number,
+	play?: PlayHighlight
+): {
 	nodes: Node[];
 	edges: Edge[];
 } {
@@ -102,6 +145,11 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 	const unreachableSet = new Set(v.unreachable);
 	const deadEndSet = new Set(v.deadEnds);
 	const missingTargetScenes = new Set(v.missingTargets.map((m) => m.scene));
+
+	const liveSceneId = play?.liveSceneId ?? null;
+	const visitedSet = play?.visited ?? new Set<string>();
+	const takenEdgeSet = play?.takenEdges ?? new Set<string>();
+	const hasActiveRun = liveSceneId !== null || visitedSet.size > 0;
 
 	// Scene nodes.
 	for (const [sceneId, scene] of Object.entries(json.scenes)) {
@@ -118,7 +166,9 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 				isUnreachable: unreachableSet.has(sceneId),
 				isDeadEnd: deadEndSet.has(sceneId),
 				hasMissingTarget: missingTargetScenes.has(sceneId),
-				inDegree: v.inDegree[sceneId] ?? 0
+				inDegree: v.inDegree[sceneId] ?? 0,
+				isLive: sceneId === liveSceneId,
+				isVisited: visitedSet.has(sceneId) && sceneId !== liveSceneId
 			} satisfies SceneNodeData
 		});
 
@@ -128,6 +178,16 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 		scene.choices.forEach((choice, i) => {
 			const target = choice.next ?? FINISH_NODE_ID;
 			const points = choice.points ?? 0;
+			const edgeKey = `${sceneId}-${i}`;
+			// Edge style switches on the run:
+			//   - run active + edge taken → cyan thick line
+			//   - run active + edge not taken → dim dashed
+			//   - no run → default amber
+			const style = hasActiveRun
+				? takenEdgeSet.has(edgeKey)
+					? EDGE_STROKE_STYLE_TAKEN
+					: EDGE_STROKE_STYLE_DIM
+				: EDGE_STROKE_STYLE;
 			edges.push({
 				id: `${sceneId}-${i}-${target}`,
 				source: sceneId,
@@ -142,7 +202,7 @@ export function buildGraph(json: AdventureJson, maxScore: number): {
 				labelBgBorderRadius: EDGE_LABEL_BG_RADIUS,
 				labelStyle: EDGE_LABEL_STYLE,
 				labelBgStyle: EDGE_LABEL_BG_STYLE,
-				style: EDGE_STROKE_STYLE,
+				style,
 				markerEnd: ARROW_MARKER
 			});
 		});

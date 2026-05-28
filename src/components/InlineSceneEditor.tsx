@@ -48,6 +48,8 @@ interface Props {
 	onClose: () => void;
 	/** "⤢ open in side panel" — hides this card so the right-panel SceneEditor is the focus. */
 	onExpand: () => void;
+	/** "▶ play from here" — boots the playtest at this scene without mutating the document's start. */
+	onPlayFromHere: () => void;
 }
 
 const CARD_WIDTH = 520;
@@ -61,7 +63,8 @@ export function InlineSceneEditor({
 	sceneId,
 	onJsonChange,
 	onClose,
-	onExpand
+	onExpand,
+	onPlayFromHere
 }: Props) {
 	const rf = useReactFlow();
 	// Subscribe to the React Flow viewport transform so this
@@ -264,13 +267,7 @@ export function InlineSceneEditor({
 				>
 					+ choice
 				</FooterButton>
-				<FooterButton
-					color={CYAN}
-					onClick={() => {
-						/* Move 03 will wire this to the playtest terminal. */
-					}}
-					disabled
-				>
+				<FooterButton color={CYAN} onClick={onPlayFromHere}>
 					▶ play from here
 				</FooterButton>
 			</div>
