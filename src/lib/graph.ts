@@ -40,17 +40,20 @@ const EDGE_LABEL_BG_STYLE = {
 const EDGE_STROKE_STYLE = { stroke: AMBER, strokeWidth: 1.5 } as const;
 
 /**
- * Custom arrow marker referenced by URL. React Flow's built-in
- * `arrowclosed` marker has `refX` at the centre of the triangle,
- * so the line draws all the way to the centre and visually
- * passes through the arrowhead's interior. Our marker sits in
- * the SVG defs block in `App.tsx` with `refX="1"` — the line
- * terminates just inside the triangle base instead, no
- * crossover.
+ * Custom arrow marker referenced by ID. React Flow's
+ * `arrowclosed` marker has `refX` at the centre of the
+ * triangle, so the line draws all the way to the centre and
+ * visually passes through the arrowhead's interior. Our marker
+ * sits in the SVG defs block in `App.tsx` with `refX="1"` —
+ * the line terminates just inside the triangle base instead,
+ * no crossover.
+ *
+ * React Flow wraps a string `markerEnd` as `url('#${id}')`
+ * internally, so we pass just the bare id — passing the
+ * `url(...)` form here would double-wrap and break.
  */
-const ARROW_MARKER = 'url(#cas-arrow-base)';
-
 export const ARROW_MARKER_ID = 'cas-arrow-base';
+const ARROW_MARKER = ARROW_MARKER_ID;
 
 const EDGE_LABEL_BG_PADDING: [number, number] = [6, 4];
 const EDGE_LABEL_BG_RADIUS = 4;
