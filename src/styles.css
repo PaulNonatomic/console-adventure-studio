@@ -1,0 +1,36 @@
+/*
+ * Minimal global styles. Most of the UI is styled inline via
+ * the theme constants — this file just resets the document so
+ * the app fills the viewport cleanly and overrides a couple of
+ * React Flow defaults to match the brand palette.
+ */
+html,
+body,
+#root {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	background: #0a0a0f;
+	color: #eef0f5;
+	font-family:
+		ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+		Helvetica, Arial, sans-serif;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+/* React Flow control buttons — match the brand void/lime
+   palette rather than the default white background. */
+.react-flow__controls button {
+	background: #13131a !important;
+	color: #c7f441 !important;
+	border-bottom: 1px solid #252535 !important;
+}
+.react-flow__controls button:hover {
+	background: #1b1b25 !important;
+}
+.react-flow__controls button svg {
+	fill: #c7f441 !important;
+}
