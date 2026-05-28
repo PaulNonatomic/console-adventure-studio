@@ -129,14 +129,20 @@ export function Terminal({ json }: Props) {
 				fontFamily: 'ui-monospace, "JetBrains Mono", monospace'
 			}}
 		>
-			{/* Output area */}
+			{/* Output area.
+			    `line-height: 1.35` matches the real dev console
+			    more closely than the 1.5 we used to have — the
+			    browser console is tighter than typical body-text
+			    rendering and the playtest should feel like the
+			    real thing, not a more spacious body-text
+			    version of it. */}
 			<div
 				style={{
 					flex: 1,
 					overflow: 'auto',
 					padding: '14px 6px 14px 14px',
 					fontSize: 11,
-					lineHeight: 1.5,
+					lineHeight: 1.35,
 					color: TEXT
 				}}
 			>
