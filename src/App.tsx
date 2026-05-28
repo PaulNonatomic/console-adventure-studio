@@ -250,10 +250,11 @@ export default function App() {
 						fitViewOptions={{
 							nodes: focusNodeIds.map((id) => ({ id })),
 							padding: 0.15,
-							// 0.7 — pulls back enough that more of the graph
-							// is in view from the start. User can still zoom
-							// in via the controls if they need detail.
-							minZoom: 0.7,
+							// 0.6 — pulls back further so larger scripts land
+							// with more context in frame at first load. Users
+							// can still zoom in via the controls (top-right)
+							// when they want to read a single node closely.
+							minZoom: 0.6,
 							maxZoom: 1.6
 						}}
 						minZoom={0.2}
