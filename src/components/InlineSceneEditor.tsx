@@ -447,30 +447,51 @@ function ChoiceRow({
 				onFocus={(e) => (e.target.style.background = `${AMBER}11`)}
 				onBlur={(e) => (e.target.style.background = 'transparent')}
 			/>
-			<input
-				type="number"
-				value={points}
-				onChange={(e) =>
-					onJsonChange(
-						updateChoice(json, sceneId, choiceIndex, {
-							points: Number(e.target.value) || 0
-						})
-					)
-				}
+			{/* Points field — wrapped in a small labelled pill so
+			    its meaning is obvious without taking up extra
+			    vertical real estate. The "+" prefix matches the
+			    "+pts" convention used everywhere else (graph
+			    edge labels, ScriptView, etc.). */}
+			<span
+				title="points awarded for this choice"
 				style={{
-					width: 44,
+					display: 'inline-flex',
+					alignItems: 'center',
+					gap: 2,
 					background: VOID,
 					border: `1px solid ${PANEL_BORDER}`,
 					borderRadius: 4,
+					padding: '0 4px',
 					color: PHOSPHOR,
-					fontFamily: 'inherit',
 					fontSize: 10,
-					padding: '2px 4px',
-					outline: 'none',
-					textAlign: 'center'
+					lineHeight: 1
 				}}
-				title="points"
-			/>
+			>
+				<span style={{ color: DIM, fontSize: 9 }}>pts</span>
+				<span style={{ color: DIM }}>+</span>
+				<input
+					type="number"
+					value={points}
+					onChange={(e) =>
+						onJsonChange(
+							updateChoice(json, sceneId, choiceIndex, {
+								points: Number(e.target.value) || 0
+							})
+						)
+					}
+					style={{
+						width: 28,
+						background: 'transparent',
+						border: 'none',
+						color: PHOSPHOR,
+						fontFamily: 'inherit',
+						fontSize: 10,
+						padding: '2px 0',
+						outline: 'none',
+						textAlign: 'center'
+					}}
+				/>
+			</span>
 			<select
 				value={next ?? '__null__'}
 				onChange={(e) => {

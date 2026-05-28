@@ -46,7 +46,8 @@ import {
 	type FinalConnectionState,
 	BackgroundVariant,
 	useNodesState,
-	useEdgesState
+	useEdgesState,
+	useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -321,6 +322,118 @@ function AppInner() {
 		},
 		[]
 	);
+
+	// React Flow's `onNodeClick` fires with the post-click node
+	// state (`selected: true` regardless of whether selection
+	// actually changed), so we can't tell from `node.selected`
+	// alone whether the user clicked an already-selected node.
+	// This ref tracks the selection AS OF THE PREVIOUS RENDER —
+	// when onNodeClick fires synchronously during a click, the
+	// ref still reflects the pre-click state. If it equals the
+	// clicked node's id, the user clicked the same node twice in
+	// a row → deselect.
+	const prevSelectedRef = useRef<string | null>(null);
+	useEffect(() => {
+		prevSelectedRef.current = selectedScene;
+	}, [selectedScene]);
+
+	// Keyboard shortcut: Shift+L re-runs the auto layout. Skips
+	// when the user is typing in an input/textarea so the
+	// shortcut doesn't fight the inline editor's heading field
+	// (capital L is a common letter to type).
+	const handleAutoLayoutRef = useRef<() => void>(() => {});
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key !== 'L' || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+			const target = e.target as HTMLElement | null;
+			const tag = target?.tagName;
+			if (
+				tag === 'INPUT' ||
+				tag === 'TEXTAREA' ||
+				tag === 'SELECT' ||
+				target?.isContentEditable
+			) {
+				return;
+			}
+			e.preventDefault();
+			handleAutoLayoutRef.current();
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, []);
+
+	const handleNodeClick = useCallback(
+		(_e: React.MouseEvent, node: Node) => {
+			if (prevSelectedRef.current === node.id) {
+				// Toggle off — clear the selected flag on every
+				// node so React Flow's `onSelectionChange` fires
+				// with an empty array, which threads through to
+				// setSelectedScene(null) via handleSelectionChange.
+				setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
+			}
+		},
+		[setRfNodes]
+	);
+
+	// React Flow instance — used by the auto-layout button to
+	// re-frame the camera after positions get reset. Safe to
+	// call here because AppInner sits inside <ReactFlowProvider>
+	// (see the default export above).
+	const reactFlow = useReactFlow();
+
+	/**
+	 * Re-run layoutGraph and overwrite every node's position.
+	 * Useful after the user has hand-dragged nodes around the
+	 * canvas — React Flow lets them park nodes wherever, but
+	 * there's no built-in "tidy up" action. This brings the
+	 * graph back to the BFS-derived top-down layout.
+	 *
+	 * We preserve the `selected` flag and don't bump
+	 * `jsonVersion`, so the canvas re-positions in place rather
+	 * than remounting and losing the selection.
+	 */
+	const handleAutoLayout = useCallback(() => {
+		const built = buildGraph(json, maxScore, {
+			liveSceneId,
+			visited: visitedSet,
+			takenEdges: takenEdgeSet
+		});
+		const positioned = layoutGraph(built.nodes, built.edges, json.start);
+		setRfNodes((prev) => {
+			const wasSelected = new Map(prev.map((n) => [n.id, !!n.selected]));
+			return positioned.map((n) =>
+				wasSelected.get(n.id) ? { ...n, selected: true } : n
+			);
+		});
+		setRfEdges(built.edges);
+		// Defer fitView so the new positions have committed
+		// before the camera reads them. Without the
+		// requestAnimationFrame the fitView lands on the OLD
+		// positions and the visible tidy-up feels half-finished.
+		requestAnimationFrame(() => {
+			reactFlow.fitView({
+				padding: 0.15,
+				duration: 400,
+				minZoom: DEFAULT_ZOOM,
+				maxZoom: DEFAULT_ZOOM
+			});
+		});
+	}, [
+		json,
+		maxScore,
+		liveSceneId,
+		visitedSet,
+		takenEdgeSet,
+		setRfNodes,
+		setRfEdges,
+		reactFlow
+	]);
+
+	// Keep the keyboard shortcut's ref pointing at the latest
+	// closure — the listener itself only mounts once.
+	useEffect(() => {
+		handleAutoLayoutRef.current = handleAutoLayout;
+	}, [handleAutoLayout]);
 
 	// (Dev-only zoom tuning logger removed in Move 01 — the
 	// DEFAULT_ZOOM value is now settled at 1.056 and the
@@ -662,6 +775,7 @@ function AppInner() {
 						onEdgesChange={onEdgesChange}
 						onConnect={handleConnect}
 						onConnectEnd={handleConnectEnd}
+						onNodeClick={handleNodeClick}
 						connectionLineStyle={{
 							stroke: PHOSPHOR,
 							strokeWidth: 2,
@@ -711,6 +825,40 @@ function AppInner() {
 						/>
 					</ReactFlow>
 
+					{/* Auto-layout button — top-left so it stays
+					    out of the way of React Flow's built-in
+					    Controls at top-right. Tidies the canvas
+					    after manual node-dragging by re-running
+					    the BFS layout and fitting the view. */}
+					<button
+						onClick={handleAutoLayout}
+						title="Re-run auto layout (Shift+L)"
+						style={{
+							position: 'absolute',
+							top: 12,
+							left: 12,
+							background: PANEL,
+							color: AMBER,
+							border: `1px solid ${PANEL_BORDER}`,
+							borderRadius: 5,
+							padding: '5px 10px',
+							fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
+							fontSize: 11,
+							cursor: 'pointer',
+							transition: 'border-color 120ms, color 120ms, background 120ms'
+						}}
+						onMouseEnter={(e) => {
+							e.currentTarget.style.borderColor = AMBER;
+							e.currentTarget.style.background = `${AMBER}11`;
+						}}
+						onMouseLeave={(e) => {
+							e.currentTarget.style.borderColor = PANEL_BORDER;
+							e.currentTarget.style.background = PANEL;
+						}}
+					>
+						⤢ auto layout
+					</button>
+
 					<div
 						style={{
 							position: 'absolute',
@@ -722,7 +870,8 @@ function AppInner() {
 							pointerEvents: 'none'
 						}}
 					>
-						scroll to zoom · drag to pan · click a scene to edit inline
+						scroll to zoom · drag to pan · click a scene to edit inline ·
+						click again to deselect
 					</div>
 
 					{/* Restore-card chip — visible only when the user
