@@ -92,6 +92,7 @@ import {
 } from './lib/storage';
 import { DraftBanner } from './components/DraftBanner';
 import { Toast } from './components/Toast';
+import { CommandPalette, type PaletteCommand } from './components/CommandPalette';
 import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { Tour, clearTourSeen } from './components/Tour';
@@ -251,6 +252,19 @@ function AppInner() {
 	// entry. Component handles its own seen-state persistence.
 	const [showTour, setShowTour] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
+	// ⌘K command palette. Open via the keyboard shortcut below
+	// and via the ⋯ menu entry; closes via Esc / backdrop /
+	// running a command.
+	const [showPalette, setShowPalette] = useState(false);
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k') return;
+			e.preventDefault();
+			setShowPalette((open) => !open);
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, []);
 	// Move 02a: when the user clicks ⤢ on the inline editor we
 	// want the right-panel SceneEditor to take focus. We don't
 	// deselect (the node is still the subject of editing) — we
@@ -1302,6 +1316,152 @@ function AppInner() {
 		setCurrentSaveId(id);
 	}
 
+	// Command list for the ⌘K palette. Every entry routes to a
+	// handler already wired elsewhere -- the palette is a
+	// universal dispatcher, not a parallel API. Disabled
+	// commands are filtered out inside the palette so the user
+	// can't pick something that wouldn't work.
+	const paletteCommands: PaletteCommand[] = [
+		{ id: 'new', icon: '＋', label: 'New adventure', kbd: '⌘N', onRun: newAdventure },
+		{
+			id: 'save',
+			icon: '✓',
+			label: 'Save',
+			kbd: '⌘S',
+			disabled: !saveAvailable,
+			onRun: () => void saveCurrent()
+		},
+		{
+			id: 'saveAs',
+			icon: '⤓',
+			label: 'Save as…',
+			kbd: '⌘⇧S',
+			disabled: !saveAvailable,
+			onRun: () => void saveAs()
+		},
+		{
+			id: 'rename',
+			icon: '✎',
+			label: 'Rename save…',
+			disabled: !saveAvailable || currentSaveId === null,
+			onRun: () => void renameCurrent()
+		},
+		{
+			id: 'duplicate',
+			icon: '⎘',
+			label: 'Duplicate save…',
+			disabled: !saveAvailable,
+			onRun: () => void duplicateCurrent()
+		},
+		{
+			id: 'load',
+			icon: '⌘',
+			label: 'Load saved…',
+			disabled: !saveAvailable,
+			onRun: () => setShowLoadDialog(true)
+		},
+		{
+			id: 'ship',
+			icon: '↗',
+			label: 'Export / Ship…',
+			kbd: '⌘E',
+			onRun: () => setShowShipDialog(true)
+		},
+		// Open menu items
+		{ id: 'openExample', icon: '◆', label: 'Open: example adventure', onRun: loadExample },
+		// Edit
+		{
+			id: 'undo',
+			icon: '↶',
+			label: 'Undo',
+			kbd: '⌘Z',
+			disabled: history.past.length === 0,
+			onRun: undo
+		},
+		{
+			id: 'redo',
+			icon: '↷',
+			label: 'Redo',
+			kbd: '⌘⇧Z',
+			disabled: history.future.length === 0,
+			onRun: redo
+		},
+		// View
+		{ id: 'play', icon: '▶', label: 'Play tab', onRun: () => setRightTab('play') },
+		{
+			id: 'inspect',
+			icon: '✎',
+			label: 'Inspect tab',
+			onRun: () => setRightTab('inspect')
+		},
+		{
+			id: 'viewGraph',
+			icon: '◯',
+			label: 'View: graph',
+			disabled: viewMode === 'graph',
+			onRun: () => handleViewModeChange('graph')
+		},
+		{
+			id: 'viewWrite',
+			icon: '✎',
+			label: 'View: write (script)',
+			disabled: viewMode === 'write',
+			onRun: () => handleViewModeChange('write')
+		},
+		{
+			id: 'viewSplit',
+			icon: '◧',
+			label: 'View: split',
+			disabled: viewMode === 'split',
+			onRun: () => handleViewModeChange('split')
+		},
+		{
+			id: 'flowH',
+			icon: '→',
+			label: 'Flow direction: horizontal',
+			disabled: flowDirection === 'horizontal',
+			onRun: () => handleFlowDirectionChange('horizontal')
+		},
+		{
+			id: 'flowV',
+			icon: '↓',
+			label: 'Flow direction: vertical',
+			disabled: flowDirection === 'vertical',
+			onRun: () => handleFlowDirectionChange('vertical')
+		},
+		// Layout / camera
+		{ id: 'autoLayout', icon: '⤢', label: 'Auto layout', kbd: '⇧L', onRun: handleAutoLayout },
+		{
+			id: 'resetZoom',
+			icon: '⊡',
+			label: 'Reset zoom',
+			onRun: () =>
+				reactFlow.fitView({
+					padding: 0.15,
+					duration: 400,
+					minZoom: DEFAULT_ZOOM,
+					maxZoom: DEFAULT_ZOOM
+				})
+		},
+		{
+			id: 'fit',
+			icon: '⛶',
+			label: 'Fit to screen',
+			onRun: () => reactFlow.fitView({ padding: 0.12, duration: 400 })
+		},
+		// Help
+		{
+			id: 'tour',
+			icon: '?',
+			label: 'Help / tour',
+			onRun: () => {
+				clearTourSeen();
+				setShowTour(true);
+			}
+		},
+		{ id: 'about', icon: 'ⓘ', label: 'About…', onRun: () => setShowAbout(true) }
+	];
+
 	return (
 		<SceneActionsProvider value={{ onPlayFromHere: handlePlayFromHere }}>
 		<div
@@ -1367,6 +1527,7 @@ function AppInner() {
 					setShowTour(true);
 				}}
 				onShowAbout={() => setShowAbout(true)}
+				onOpenPalette={() => setShowPalette(true)}
 				onUndo={undo}
 				onRedo={redo}
 				canUndo={history.past.length > 0}
@@ -1381,6 +1542,12 @@ function AppInner() {
 
 			{showTour && <Tour onClose={() => setShowTour(false)} />}
 			{showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+			{showPalette && (
+				<CommandPalette
+					commands={paletteCommands}
+					onClose={() => setShowPalette(false)}
+				/>
+			)}
 			{draftRestored !== null && (
 				<DraftBanner
 					savedAt={draftRestored}

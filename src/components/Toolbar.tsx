@@ -45,6 +45,7 @@ interface Props {
 	canRedo: boolean;
 	onStartTour: () => void;
 	onShowAbout: () => void;
+	onOpenPalette: () => void;
 	onSaveAs: () => void;
 	onRename: () => void;
 	onDuplicate: () => void;
@@ -81,6 +82,7 @@ export function Toolbar(props: Props) {
 		canRedo,
 		onStartTour,
 		onShowAbout,
+		onOpenPalette,
 		onSaveAs,
 		onRename,
 		onDuplicate,
@@ -185,6 +187,13 @@ export function Toolbar(props: Props) {
 	];
 
 	const moreMenuItems: MenuItem[] = [
+		{
+			icon: '⌘',
+			label: 'Command palette…',
+			kbd: '⌘K',
+			onClick: onOpenPalette
+		},
+		'-',
 		{ icon: '↶', label: 'Undo', kbd: '⌘Z', onClick: onUndo, disabled: !canUndo },
 		{
 			icon: '↷',
