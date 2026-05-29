@@ -146,8 +146,13 @@ export function SceneEditor({ json, sceneId, onJsonChange, onSelectScene }: Prop
 								/>
 							</div>
 						</div>
+						{/* "Reaction" is what the player sees right after
+						    picking this choice -- the engine API field is
+						    `flavour` (from tabletop's "flavour text"), but
+						    that name isn't obvious in an authoring UI, so
+						    the label is renamed here for the author. */}
 						<Textarea
-							label="FLAVOUR (optional)"
+							label="REACTION (shown after the choice)"
 							value={c.flavour ?? ''}
 							rows={2}
 							onChange={(flavour) =>

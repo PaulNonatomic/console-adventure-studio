@@ -86,6 +86,7 @@ import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
+import { EdgeEditor } from './components/EdgeEditor';
 import { ConfirmProvider, useConfirm } from './lib/confirm';
 import { ScriptView } from './components/ScriptView';
 import { ViewToggle } from './components/ViewToggle';
@@ -991,6 +992,37 @@ function AppInner() {
 					}}
 				/>
 			)}
+
+			{/* Edge editor — floats over the canvas when a
+			    connection is selected. Anchored to the edge's
+			    midpoint via the React Flow instance, so it sits
+			    on the wire the author just clicked. Carries the
+			    choice's full surface: label, points, next, and
+			    REACTION (the field the engine still calls
+			    `flavour`). */}
+			{viewMode !== 'write' &&
+				selectedEdgeId &&
+				(() => {
+					const edge = rfEdges.find((e) => e.id === selectedEdgeId);
+					const data = edge?.data as
+						| { sceneId?: string; choiceIndex?: number }
+						| undefined;
+					if (!edge || data?.sceneId === undefined || data.choiceIndex === undefined) {
+						return null;
+					}
+					return (
+						<EdgeEditor
+							json={json}
+							sceneId={data.sceneId}
+							choiceIndex={data.choiceIndex}
+							onJsonChange={handleJsonChange}
+							onClose={() => {
+								setRfEdges((prev) => prev.map((e) => ({ ...e, selected: false })));
+								setSelectedEdgeId(null);
+							}}
+						/>
+					);
+				})()}
 
 			<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
 				{/* ScriptView occupies the full canvas area in
