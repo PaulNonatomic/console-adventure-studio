@@ -23,6 +23,7 @@ import {
 	pasteJsonFromClipboard,
 	fetchJsonFromUrl
 } from '../lib/import';
+import { usePrompt } from '../lib/prompt';
 
 interface Props {
 	documentName: string;
@@ -38,8 +39,13 @@ interface Props {
 	onAutoLayout: () => void;
 	onResetZoom: () => void;
 	onStartTour: () => void;
+	onSaveAs: () => void;
+	onRename: () => void;
+	onDuplicate: () => void;
 	onError: (message: string) => void;
 	saveAvailable: boolean;
+	/** True when we have a tracked save id (rename/dup are meaningful). */
+	hasCurrentSave: boolean;
 }
 
 const BAR_HEIGHT = 56;
@@ -63,14 +69,19 @@ export function Toolbar(props: Props) {
 		onAutoLayout,
 		onResetZoom,
 		onStartTour,
+		onSaveAs,
+		onRename,
+		onDuplicate,
 		onError,
-		saveAvailable
+		saveAvailable,
+		hasCurrentSave
 	} = props;
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const headerRef = useRef<HTMLElement | null>(null);
 	const [size, setSize] = useState<Size>('desktop');
 	const [openMenu, setOpenMenu] = useState<'open' | 'more' | null>(null);
+	const prompt = usePrompt();
 
 	// Track header width via ResizeObserver. Collapses degrade
 	// by priority: stats drop first, then ＋ new, then Play
@@ -97,8 +108,14 @@ export function Toolbar(props: Props) {
 	function handlePaste() {
 		void pasteJsonFromClipboard(callbacks);
 	}
-	function handleFetchUrl() {
-		const url = window.prompt('Fetch adventure JSON from URL:');
+	async function handleFetchUrl() {
+		const url = await prompt({
+			title: 'Fetch adventure from URL',
+			message:
+				'Paste a public URL pointing at an adventure.json. Must be reachable via CORS.',
+			placeholder: 'https://example.com/adventure.json',
+			confirmLabel: 'Fetch'
+		});
 		if (!url) return;
 		void fetchJsonFromUrl(url, callbacks);
 	}
@@ -131,7 +148,12 @@ export function Toolbar(props: Props) {
 					break;
 				case 's':
 					e.preventDefault();
-					if (saveAvailable) onSave();
+					if (!saveAvailable) break;
+					// ⌘⇧S → "Save as" so the author can fork the
+					// current adventure into a new save without
+					// having to dig into the ⋯ menu.
+					if (e.shiftKey) onSaveAs();
+					else onSave();
 					break;
 				case 'e':
 					e.preventDefault();
@@ -141,7 +163,7 @@ export function Toolbar(props: Props) {
 		};
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
-	}, [onNewAdventure, onSave, onOpenShipDialog, saveAvailable]);
+	}, [onNewAdventure, onSave, onSaveAs, onOpenShipDialog, saveAvailable]);
 
 	const openMenuItems: MenuItem[] = [
 		{ icon: '◆', label: 'Example adventure', onClick: onLoadExample },
@@ -154,6 +176,25 @@ export function Toolbar(props: Props) {
 		...(size !== 'desktop'
 			? [{ icon: '＋', label: 'New adventure', kbd: '⌘N', onClick: onNewAdventure }]
 			: []),
+		{
+			icon: '⤓',
+			label: 'Save as…',
+			kbd: '⌘⇧S',
+			onClick: onSaveAs,
+			disabled: !saveAvailable
+		},
+		{
+			icon: '✎',
+			label: 'Rename…',
+			onClick: onRename,
+			disabled: !saveAvailable || !hasCurrentSave
+		},
+		{
+			icon: '⎘',
+			label: 'Duplicate…',
+			onClick: onDuplicate,
+			disabled: !saveAvailable
+		},
 		{ icon: '⌘', label: 'Load saved…', onClick: onOpenLoadDialog, disabled: !saveAvailable },
 		{ icon: '↗', label: 'Export / Ship…', kbd: '⌘E', onClick: onOpenShipDialog },
 		'-',

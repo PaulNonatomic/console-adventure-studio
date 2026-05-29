@@ -81,7 +81,7 @@ import { layoutGraph } from './lib/layout';
 import { computeMaxScore } from 'console-adventure';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
-import { createSave, storageAvailable } from './lib/storage';
+import { createSave, updateSave, loadSave, storageAvailable } from './lib/storage';
 import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { Tour, clearTourSeen } from './components/Tour';
@@ -89,6 +89,7 @@ import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
 import { EdgeEditor } from './components/EdgeEditor';
 import { ConfirmProvider, useConfirm } from './lib/confirm';
+import { PromptProvider, usePrompt } from './lib/prompt';
 import { ScriptView } from './components/ScriptView';
 import { ViewToggle } from './components/ViewToggle';
 import { FlowDirectionToggle } from './components/FlowDirectionToggle';
@@ -180,15 +181,18 @@ const edgeTypes = { choice: ChoiceEdge };
 export default function App() {
 	return (
 		<ConfirmProvider>
-			<ReactFlowProvider>
-				<AppInner />
-			</ReactFlowProvider>
+			<PromptProvider>
+				<ReactFlowProvider>
+					<AppInner />
+				</ReactFlowProvider>
+			</PromptProvider>
 		</ConfirmProvider>
 	);
 }
 
 function AppInner() {
 	const confirm = useConfirm();
+	const prompt = usePrompt();
 	const [json, setJson] = useState<AdventureJson>(FOUNDRY_EXAMPLE);
 	const [jsonVersion, setJsonVersion] = useState(0);
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
@@ -196,6 +200,13 @@ function AppInner() {
 	const [showLoadDialog, setShowLoadDialog] = useState(false);
 	const [showShipDialog, setShowShipDialog] = useState(false);
 	const [currentSaveName, setCurrentSaveName] = useState<string | null>(null);
+	// Track the localStorage save id alongside the name. Without
+	// it, every save would CREATE a new entry (the original
+	// behaviour), so saving twice with the same name produced
+	// two duplicate rows in the load dialog. Tracking the id lets
+	// "save" update-in-place; new entries only spawn from
+	// explicit "save as" / "duplicate" actions.
+	const [currentSaveId, setCurrentSaveId] = useState<string | null>(null);
 	// "Document is dirty" — set on every json edit; cleared on
 	// save / load / new. Drives the saved-state dot in the
 	// Toolbar. Lives in state rather than ref so the dot
@@ -746,6 +757,10 @@ function AppInner() {
 		setSelectedScene(null);
 		setError(null);
 		setDirty(false);
+		// Externally-loaded JSON is not yet associated with a
+		// localStorage entry; force a "Save as" on next save.
+		setCurrentSaveName(null);
+		setCurrentSaveId(null);
 	}
 
 	function loadExample() {
@@ -755,6 +770,7 @@ function AppInner() {
 		setError(null);
 		setDirty(false);
 		setCurrentSaveName(null);
+		setCurrentSaveId(null);
 	}
 
 	function newAdventure() {
@@ -763,6 +779,7 @@ function AppInner() {
 		setSelectedScene(null);
 		setError(null);
 		setCurrentSaveName(null);
+		setCurrentSaveId(null);
 		setDirty(false);
 	}
 
@@ -778,6 +795,7 @@ function AppInner() {
 		setSelectedScene(STARTER_ADVENTURE.start);
 		setError(null);
 		setCurrentSaveName(null);
+		setCurrentSaveId(null);
 		setDirty(false);
 	}
 
@@ -800,6 +818,7 @@ function AppInner() {
 		// `data-tour="scene-node"` and won't find it otherwise.
 		setTimeout(() => setShowTour(true), 50);
 		setCurrentSaveName(null);
+		setCurrentSaveId(null);
 		setDirty(false);
 	}
 
@@ -825,30 +844,100 @@ function AppInner() {
 		[setRfNodes]
 	);
 
-	function saveCurrent() {
-		// Prefill with the existing save name (if any) or the
-		// adventure's start scene id. window.prompt is good
-		// enough for a one-field "name this thing" interaction
-		// — no need for a dedicated modal.
-		const defaultName = currentSaveName ?? `Adventure ${new Date().toLocaleDateString()}`;
-		const name = window.prompt('Name this save:', defaultName);
+	/**
+	 * Save. Update-in-place if we already know which entry the
+	 * current adventure came from; prompt for a name + create a
+	 * new entry if not. The previous implementation always
+	 * called `createSave`, which silently produced duplicate
+	 * rows whenever the author saved the same adventure twice.
+	 */
+	async function saveCurrent() {
+		// Have a tracked save and it still exists -> overwrite.
+		if (currentSaveId && loadSave(currentSaveId)) {
+			const ok = updateSave(currentSaveId, { json });
+			if (!ok) {
+				setError("Couldn't save to localStorage (quota or blocked).");
+				return;
+			}
+			setDirty(false);
+			return;
+		}
+		// Otherwise fall through to "save as".
+		await saveAs();
+	}
+
+	async function saveAs() {
+		const defaultName =
+			currentSaveName ?? `Adventure ${new Date().toLocaleDateString()}`;
+		const name = await prompt({
+			title: 'Save as',
+			message: 'Pick a name for this save. It will appear in the load dialog.',
+			initialValue: defaultName,
+			confirmLabel: 'Save'
+		});
 		if (!name) return;
-		const id = createSave(name.trim(), json);
+		const id = createSave(name, json);
 		if (id === null) {
 			setError("Couldn't save to localStorage (quota or blocked).");
 			return;
 		}
-		setCurrentSaveName(name.trim());
+		setCurrentSaveId(id);
+		setCurrentSaveName(name);
 		setDirty(false);
 	}
 
-	function loadFromStorage(loadedJson: AdventureJson, name: string) {
+	async function renameCurrent() {
+		if (!currentSaveId) {
+			// Nothing to rename yet. Treat as "save as" so the
+			// menu entry never becomes a dead end.
+			await saveAs();
+			return;
+		}
+		const name = await prompt({
+			title: 'Rename save',
+			message: 'Choose a new name for this save.',
+			initialValue: currentSaveName ?? '',
+			confirmLabel: 'Rename'
+		});
+		if (!name) return;
+		const ok = updateSave(currentSaveId, { name });
+		if (!ok) {
+			setError("Couldn't rename save (storage failure).");
+			return;
+		}
+		setCurrentSaveName(name);
+	}
+
+	async function duplicateCurrent() {
+		const suggested = currentSaveName
+			? `${currentSaveName} (copy)`
+			: `Adventure ${new Date().toLocaleDateString()} (copy)`;
+		const name = await prompt({
+			title: 'Duplicate save',
+			message:
+				'Create a copy of the current adventure under a new name. The original stays unchanged.',
+			initialValue: suggested,
+			confirmLabel: 'Duplicate'
+		});
+		if (!name) return;
+		const id = createSave(name, json);
+		if (id === null) {
+			setError("Couldn't duplicate save (quota or blocked).");
+			return;
+		}
+		setCurrentSaveId(id);
+		setCurrentSaveName(name);
+		setDirty(false);
+	}
+
+	function loadFromStorage(loadedJson: AdventureJson, name: string, id: string) {
 		setJson(loadedJson);
 		setJsonVersion((v) => v + 1);
 		setDirty(false);
 		setSelectedScene(null);
 		setError(null);
 		setCurrentSaveName(name);
+		setCurrentSaveId(id);
 	}
 
 	return (
@@ -898,6 +987,10 @@ function AppInner() {
 					clearTourSeen();
 					setShowTour(true);
 				}}
+				onSaveAs={saveAs}
+				onRename={renameCurrent}
+				onDuplicate={duplicateCurrent}
+				hasCurrentSave={currentSaveId !== null}
 				saveAvailable={saveAvailable}
 				onError={setError}
 			/>

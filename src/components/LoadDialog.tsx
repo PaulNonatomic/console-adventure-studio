@@ -25,7 +25,7 @@ import type { AdventureJson } from 'console-adventure';
 
 interface Props {
 	onClose: () => void;
-	onLoad: (json: AdventureJson, name: string) => void;
+	onLoad: (json: AdventureJson, name: string, id: string) => void;
 }
 
 export function LoadDialog({ onClose, onLoad }: Props) {
@@ -130,7 +130,7 @@ export function LoadDialog({ onClose, onLoad }: Props) {
 								key={entry.id}
 								entry={entry}
 								onLoad={() => {
-									onLoad(entry.save.json, entry.save.name);
+									onLoad(entry.save.json, entry.save.name, entry.id);
 									onClose();
 								}}
 								onDelete={async () => {
