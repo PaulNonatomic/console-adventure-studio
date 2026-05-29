@@ -194,6 +194,11 @@ function AppInner() {
 	const [showLoadDialog, setShowLoadDialog] = useState(false);
 	const [showShipDialog, setShowShipDialog] = useState(false);
 	const [currentSaveName, setCurrentSaveName] = useState<string | null>(null);
+	// "Document is dirty" — set on every json edit; cleared on
+	// save / load / new. Drives the saved-state dot in the
+	// Toolbar. Lives in state rather than ref so the dot
+	// re-renders when it flips.
+	const [dirty, setDirty] = useState(false);
 	// Boot overlay: shown once per browser unless the user
 	// ticks "don't show on boot" inside it. The persisted skip
 	// flag lives under `cas:skipBoot` — checked by
@@ -638,6 +643,7 @@ function AppInner() {
 	const handleJsonChange = useCallback(
 		(next: AdventureJson, opts?: { remount?: boolean }) => {
 			setJson(next);
+			setDirty(true);
 			if (opts?.remount) setJsonVersion((v) => v + 1);
 		},
 		[]
@@ -733,6 +739,7 @@ function AppInner() {
 		setJsonVersion((v) => v + 1);
 		setSelectedScene(null);
 		setError(null);
+		setDirty(false);
 	}
 
 	function loadExample() {
@@ -740,6 +747,8 @@ function AppInner() {
 		setJsonVersion((v) => v + 1);
 		setSelectedScene(null);
 		setError(null);
+		setDirty(false);
+		setCurrentSaveName(null);
 	}
 
 	function newAdventure() {
@@ -748,6 +757,7 @@ function AppInner() {
 		setSelectedScene(null);
 		setError(null);
 		setCurrentSaveName(null);
+		setDirty(false);
 	}
 
 	/**
@@ -762,6 +772,7 @@ function AppInner() {
 		setSelectedScene(STARTER_ADVENTURE.start);
 		setError(null);
 		setCurrentSaveName(null);
+		setDirty(false);
 	}
 
 	/**
@@ -779,6 +790,7 @@ function AppInner() {
 		setSelectedScene(FOUNDRY_EXAMPLE.start);
 		setError(null);
 		setCurrentSaveName(null);
+		setDirty(false);
 	}
 
 	/**
@@ -817,11 +829,13 @@ function AppInner() {
 			return;
 		}
 		setCurrentSaveName(name.trim());
+		setDirty(false);
 	}
 
 	function loadFromStorage(loadedJson: AdventureJson, name: string) {
 		setJson(loadedJson);
 		setJsonVersion((v) => v + 1);
+		setDirty(false);
 		setSelectedScene(null);
 		setError(null);
 		setCurrentSaveName(name);
@@ -848,12 +862,25 @@ function AppInner() {
 			)}
 
 			<Toolbar
+				documentName={currentSaveName ?? '(unsaved)'}
+				dirty={dirty}
+				stats={{ scenes: Object.keys(json.scenes).length, maxScore }}
 				onLoadExample={loadExample}
 				onLoadJson={loadJson}
 				onNewAdventure={newAdventure}
 				onSave={saveCurrent}
 				onOpenLoadDialog={() => setShowLoadDialog(true)}
 				onOpenShipDialog={() => setShowShipDialog(true)}
+				onPlay={() => setRightTab('play')}
+				onAutoLayout={handleAutoLayout}
+				onResetZoom={() => {
+					reactFlow.fitView({
+						padding: 0.15,
+						duration: 400,
+						minZoom: DEFAULT_ZOOM,
+						maxZoom: DEFAULT_ZOOM
+					});
+				}}
 				saveAvailable={saveAvailable}
 				onError={setError}
 			/>
