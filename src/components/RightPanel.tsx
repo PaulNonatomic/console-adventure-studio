@@ -71,6 +71,7 @@ export function RightPanel({
 
 	return (
 		<aside
+			data-tour="right-panel"
 			style={{
 				width,
 				flexShrink: 0,
@@ -156,7 +157,12 @@ function TabBar({
 				active={active === 'inspect'}
 				onClick={() => onChange('inspect')}
 			/>
-			<TabButton label="play" active={active === 'play'} onClick={() => onChange('play')} />
+			<TabButton
+				label="play"
+				dataTour="play-tab"
+				active={active === 'play'}
+				onClick={() => onChange('play')}
+			/>
 		</div>
 	);
 }
@@ -164,15 +170,18 @@ function TabBar({
 function TabButton({
 	label,
 	active,
-	onClick
+	onClick,
+	dataTour
 }: {
 	label: string;
 	active: boolean;
 	onClick: () => void;
+	dataTour?: string;
 }) {
 	return (
 		<button
 			onClick={onClick}
+			data-tour={dataTour}
 			style={{
 				flex: 1,
 				background: 'transparent',

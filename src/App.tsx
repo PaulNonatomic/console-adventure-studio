@@ -84,6 +84,7 @@ import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
 import { createSave, storageAvailable } from './lib/storage';
 import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
+import { Tour, clearTourSeen } from './components/Tour';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
 import { EdgeEditor } from './components/EdgeEditor';
@@ -205,6 +206,10 @@ function AppInner() {
 	// flag lives under `cas:skipBoot` — checked by
 	// `shouldShowBootOverlay()` so the read is encapsulated.
 	const [showBoot, setShowBoot] = useState<boolean>(() => shouldShowBootOverlay());
+	// Guided tour. Triggered by the boot overlay's "Tour the
+	// Foundry" choice and by the Toolbar ⋯ → Help/tour menu
+	// entry. Component handles its own seen-state persistence.
+	const [showTour, setShowTour] = useState(false);
 	// Move 02a: when the user clicks ⤢ on the inline editor we
 	// want the right-panel SceneEditor to take focus. We don't
 	// deselect (the node is still the subject of editing) — we
@@ -780,16 +785,20 @@ function AppInner() {
 	 * Boot overlay's "tour the foundry" path. The example is
 	 * already the default; this just ensures we're on it and
 	 * preselects the start scene so the inspector shows scene
-	 * content rather than the adventure-level view. The
-	 * coachmark / tour itself is intentionally not implemented
-	 * in this pass — see the Move 01 spec §"Guided tour" for
-	 * the explicit stub-and-defer decision.
+	 * content rather than the adventure-level view. Then kicks
+	 * off the 4-step coachmark sequence in Tour.tsx -- deferred
+	 * the first time around, shipped now.
 	 */
 	function tourFoundry() {
 		setJson(FOUNDRY_EXAMPLE);
 		setJsonVersion((v) => v + 1);
 		setSelectedScene(FOUNDRY_EXAMPLE.start);
 		setError(null);
+		// Defer the tour to next tick so the boot overlay has
+		// time to unmount and the canvas has rendered the new
+		// nodes -- the tour's first step targets a SceneNode via
+		// `data-tour="scene-node"` and won't find it otherwise.
+		setTimeout(() => setShowTour(true), 50);
 		setCurrentSaveName(null);
 		setDirty(false);
 	}
@@ -882,9 +891,18 @@ function AppInner() {
 						maxZoom: DEFAULT_ZOOM
 					});
 				}}
+				onStartTour={() => {
+					// Clear the seen flag so the menu entry always
+					// re-launches, regardless of whether the tour
+					// has been completed in this browser before.
+					clearTourSeen();
+					setShowTour(true);
+				}}
 				saveAvailable={saveAvailable}
 				onError={setError}
 			/>
+
+			{showTour && <Tour onClose={() => setShowTour(false)} />}
 
 			{/* View-mode sub-bar — sits beneath the toolbar so
 			    it's always visible without competing with the

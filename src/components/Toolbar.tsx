@@ -37,6 +37,7 @@ interface Props {
 	onPlay: () => void;
 	onAutoLayout: () => void;
 	onResetZoom: () => void;
+	onStartTour: () => void;
 	onError: (message: string) => void;
 	saveAvailable: boolean;
 }
@@ -61,6 +62,7 @@ export function Toolbar(props: Props) {
 		onPlay,
 		onAutoLayout,
 		onResetZoom,
+		onStartTour,
 		onError,
 		saveAvailable
 	} = props;
@@ -158,6 +160,7 @@ export function Toolbar(props: Props) {
 		{ icon: '⤢', label: 'Auto layout', kbd: '⇧L', onClick: onAutoLayout },
 		{ icon: '⊡', label: 'Reset zoom', onClick: onResetZoom },
 		'-',
+		{ icon: '?', label: 'Help / tour', onClick: onStartTour },
 		{
 			icon: 'ⓘ',
 			label: `Build ${__BUILD_TAG__}`,
@@ -247,7 +250,7 @@ export function Toolbar(props: Props) {
 					</NavButton>
 				)}
 
-				<NavButton onClick={onOpenShipDialog} tone="solid">
+				<NavButton onClick={onOpenShipDialog} tone="solid" dataTour="ship-button">
 					ship ↗
 				</NavButton>
 
@@ -419,12 +422,14 @@ function NavButton({
 	tone,
 	onClick,
 	disabled = false,
-	children
+	children,
+	dataTour
 }: {
 	tone: Tone;
 	onClick: () => void;
 	disabled?: boolean;
 	children: ReactNode;
+	dataTour?: string;
 }) {
 	const color =
 		tone === 'solid'
@@ -447,6 +452,7 @@ function NavButton({
 		<button
 			onClick={disabled ? undefined : onClick}
 			disabled={disabled}
+			data-tour={dataTour}
 			style={{
 				display: 'inline-flex',
 				alignItems: 'center',

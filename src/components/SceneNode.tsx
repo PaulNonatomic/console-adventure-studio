@@ -47,6 +47,11 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 		: '0 2px 8px rgba(0,0,0,0.4)';
 	return (
 		<div
+			// Tag the START node so the guided tour can find a
+			// single representative scene to point at. Picking
+			// the start avoids hover-on-many-nodes ambiguity and
+			// matches "first thing the engine renders."
+			data-tour={d.isStart ? 'scene-node' : undefined}
 			style={{
 				background: PANEL,
 				border: `2px solid ${borderColor}`,
