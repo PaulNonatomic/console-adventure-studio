@@ -33,7 +33,14 @@ export function layoutGraph(
 	nodes: Node[],
 	edges: Edge[],
 	startId: string,
-	direction: FlowDirection = 'horizontal'
+	direction: FlowDirection = 'horizontal',
+	/**
+	 * Per-scene position overrides that bypass the BFS layout.
+	 * Used by drop-to-create so a new scene lands at the
+	 * cursor's drop point rather than snapping into the BFS
+	 * grid. Could be extended later to honour manual drags.
+	 */
+	pinnedPositions?: Map<string, { x: number; y: number }>
 ): Node[] {
 	// Build adjacency for BFS.
 	const successors = new Map<string, Set<string>>();
@@ -122,7 +129,12 @@ export function layoutGraph(
 
 	// Apply positions back to the node list. Finish node gets
 	// a touch of extra spacing so it reads as the conclusion.
+	// Pinned nodes (drop-to-create at cursor coords) bypass the
+	// BFS entirely so they don't snap back into the grid.
 	return nodes.map((node) => {
+		const pinned = pinnedPositions?.get(node.id);
+		if (pinned) return { ...node, position: pinned };
+
 		const d = depth.get(node.id) ?? 0;
 		const isFinish = node.id === FINISH_NODE_ID;
 		const extraGap = isFinish ? 40 : 0;

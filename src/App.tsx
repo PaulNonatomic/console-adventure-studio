@@ -292,6 +292,15 @@ function AppInner() {
 	const [flowDirection, setFlowDirection] = useState<FlowDirection>(() =>
 		loadFlowDirection()
 	);
+
+	// Per-scene position overrides. Populated by drop-to-create
+	// (handleConnectEnd captures the cursor's flow-space
+	// coordinates and pins the new scene there), cleared by the
+	// auto-layout button so the user can always tidy back to
+	// the BFS grid.
+	const [manualPositions, setManualPositions] = useState<
+		Map<string, { x: number; y: number }>
+	>(() => new Map());
 	const handleFlowDirectionChange = useCallback((d: FlowDirection) => {
 		setFlowDirection(d);
 		saveFlowDirection(d);
@@ -357,7 +366,10 @@ function AppInner() {
 	const initialGraph = useMemo(() => {
 		const built = buildGraph(json, maxScore, undefined, flowDirection);
 		return {
-			nodes: layoutGraph(built.nodes, built.edges, json.start, flowDirection),
+			// On first render manualPositions is empty by construction;
+		// the explicit pass keeps the call signature consistent
+		// with the in-place rebuilds below.
+		nodes: layoutGraph(built.nodes, built.edges, json.start, flowDirection, manualPositions),
 			edges: built.edges
 		};
 	}, []);
@@ -390,7 +402,13 @@ function AppInner() {
 			},
 			flowDirection
 		);
-		const positioned = layoutGraph(built.nodes, built.edges, json.start, flowDirection);
+		const positioned = layoutGraph(
+			built.nodes,
+			built.edges,
+			json.start,
+			flowDirection,
+			manualPositions
+		);
 		// Carry over React Flow's `selected` flag from the
 		// previous nodes by id. Without this, every json edit
 		// (every keystroke in the heading / narration / etc.)
@@ -412,6 +430,7 @@ function AppInner() {
 		visitedSet,
 		takenEdgeSet,
 		flowDirection,
+		manualPositions,
 		setRfNodes,
 		setRfEdges
 	]);
@@ -599,6 +618,11 @@ function AppInner() {
 	 * than remounting and losing the selection.
 	 */
 	const handleAutoLayout = useCallback(() => {
+		// "Tidy up" means going back to the BFS-derived grid, so
+		// drop any pins from drop-to-create. Pass an empty map
+		// directly (the state update is async; future rebuilds
+		// pick up the new empty state).
+		setManualPositions(new Map());
 		const built = buildGraph(
 			json,
 			maxScore,
@@ -609,7 +633,12 @@ function AppInner() {
 			},
 			flowDirection
 		);
-		const positioned = layoutGraph(built.nodes, built.edges, json.start, flowDirection);
+		const positioned = layoutGraph(
+			built.nodes,
+			built.edges,
+			json.start,
+			flowDirection
+		);
 		setRfNodes((prev) => {
 			const wasSelected = new Map(prev.map((n) => [n.id, !!n.selected]));
 			return positioned.map((n) =>
@@ -773,30 +802,34 @@ function AppInner() {
 	 * empty canvas and released. v12 surfaces this via
 	 * `onConnectEnd` with a `FinalConnectionState` whose
 	 * `isValid` is false (no node target). Spawn a fresh scene,
-	 * wire the choice to it, structurally remount so layout +
-	 * fitView re-frame the graph around the new node, and select
-	 * the new scene so the inline editor opens on it.
-	 *
-	 * Per the design handoff Decision A: we deliberately ignore
-	 * the cursor drop coordinates — `layoutGraph` re-computes
-	 * positions on every rebuild, so honouring the drop point
-	 * would just look like a glitch as the node snaps to its
-	 * BFS-derived slot.
+	 * wire the choice to it, pin the new scene at the cursor's
+	 * drop coordinates so it lands where the author released
+	 * (Move 02b Decision B -- we used to ignore the drop point
+	 * because layoutGraph would yank the node back into the
+	 * BFS grid; the new `pinnedPositions` parameter on
+	 * layoutGraph lets us honour it now).
 	 */
 	const handleConnectEnd = useCallback(
-		(_event: MouseEvent | TouchEvent, conn: FinalConnectionState) => {
+		(event: MouseEvent | TouchEvent, conn: FinalConnectionState) => {
 			if (conn.isValid) return; // onConnect already handled it
 			const sourceId = conn.fromNode?.id;
 			const i = Number(conn.fromHandle?.id?.replace('c-', ''));
 			if (!sourceId || Number.isNaN(i)) return;
+
+			// Translate the release point into flow-space BEFORE
+			// awaiting the confirm modal, so the coordinates
+			// reflect where the cursor actually was at drop time
+			// (the user might pan after the modal opens).
+			const clientX =
+				'clientX' in event ? event.clientX : event.touches?.[0]?.clientX ?? 0;
+			const clientY =
+				'clientY' in event ? event.clientY : event.touches?.[0]?.clientY ?? 0;
+			const dropPos = reactFlow.screenToFlowPosition({ x: clientX, y: clientY });
+
 			// Drop-to-create can fire on accidental drags (release
 			// too early, miss the target node). Confirm before
 			// committing so a stray drag doesn't pollute the
-			// adventure with empty stub scenes. The wording names
-			// the source choice so the author knows what they're
-			// agreeing to. We snapshot the choice label from the
-			// current json BEFORE awaiting so the modal message is
-			// derived from the same data that drove the drag.
+			// adventure with empty stub scenes.
 			const choiceLabel =
 				json.scenes[sourceId]?.choices[i]?.label ?? '(choice)';
 			void confirm({
@@ -813,15 +846,33 @@ function AppInner() {
 				if (!ok) return;
 				setJson((prev) => {
 					const { json: nextJson, id } = addSceneFromChoice(prev, sourceId, i);
-					queueMicrotask(() => {
-						setSelectedScene(id);
-						setJsonVersion((v) => v + 1);
+					// Pin the new scene at the cursor's drop point so
+					// the next layoutGraph pass doesn't snap it back
+					// into the BFS layer. Offset by half the node width
+					// so the cursor lands roughly at the node's centre.
+					const NODE_WIDTH = 300;
+					setManualPositions((curr) => {
+						const next = new Map(curr);
+						next.set(id, {
+							x: dropPos.x - NODE_WIDTH / 2,
+							y: dropPos.y - 30
+						});
+						return next;
 					});
+					// Defer the selection update so it lands after
+					// the effect that rebuilds the graph --
+					// otherwise the node we just created hasn't
+					// been emitted yet and React Flow drops the
+					// `selected` flag. We deliberately don't bump
+					// jsonVersion here (we did pre-pin) because
+					// that would remount + fitView and yank the
+					// camera away from where the author dropped.
+					queueMicrotask(() => setSelectedScene(id));
 					return nextJson;
 				});
 			});
 		},
-		[json, confirm]
+		[json, confirm, reactFlow]
 	);
 
 	function loadJson(parsed: unknown) {

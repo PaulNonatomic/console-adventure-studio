@@ -122,4 +122,23 @@ describe('layoutGraph respects direction', () => {
 		const b = positioned.find((n) => n.id === 'b')!;
 		expect(b.position.y).toBeGreaterThan(a.position.y);
 	});
+
+	it('pinnedPositions overrides BFS layout for the named ids', () => {
+		const { nodes, edges } = buildGraph(sample, 0, undefined, 'horizontal');
+		const pinned = new Map([['b', { x: 999, y: 123 }]]);
+		const positioned = layoutGraph(nodes, edges, 'a', 'horizontal', pinned);
+		const b = positioned.find((n) => n.id === 'b')!;
+		expect(b.position.x).toBe(999);
+		expect(b.position.y).toBe(123);
+	});
+
+	it('pinnedPositions does NOT affect non-pinned ids', () => {
+		const { nodes, edges } = buildGraph(sample, 0, undefined, 'horizontal');
+		const pinned = new Map([['b', { x: 999, y: 123 }]]);
+		const positioned = layoutGraph(nodes, edges, 'a', 'horizontal', pinned);
+		const a = positioned.find((n) => n.id === 'a')!;
+		// The start node still gets the BFS-derived position.
+		expect(a.position.x).not.toBe(999);
+		expect(a.position.y).not.toBe(123);
+	});
 });
