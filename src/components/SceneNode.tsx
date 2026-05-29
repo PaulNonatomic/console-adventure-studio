@@ -61,6 +61,38 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 				opacity: d.isVisited ? 0.62 : 1
 			}}
 		>
+			{/* Top-left scene-id badge. Mirrors the right-side
+			    cluster's geometry so they read as a matched
+			    pair: identity on the left, status on the right.
+			    Cyan to match the editor surfaces (EdgeEditor /
+			    ScriptView both colour the id with CYAN). */}
+			<div
+				style={{
+					position: 'absolute',
+					top: -10,
+					left: 8,
+					display: 'flex',
+					gap: 4,
+					pointerEvents: 'none',
+					maxWidth: 'calc(100% - 16px)'
+				}}
+			>
+				<Badge color={CYAN} title={`Scene id: ${d.sceneId}`}>
+					<span
+						style={{
+							overflow: 'hidden',
+							textOverflow: 'ellipsis',
+							whiteSpace: 'nowrap',
+							maxWidth: 180,
+							display: 'inline-block',
+							verticalAlign: 'bottom'
+						}}
+					>
+						{d.sceneId}
+					</span>
+				</Badge>
+			</div>
+
 			{/* Top-right validation badges. Stacked horizontally
 			    so a node with multiple issues shows all of them. */}
 			{(d.isUnreachable || d.isDeadEnd || d.hasMissingTarget || d.inDegree > 0) && (
