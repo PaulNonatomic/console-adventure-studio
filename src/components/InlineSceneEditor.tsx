@@ -579,7 +579,7 @@ function FooterButton({
 		<button
 			onClick={disabled ? undefined : onClick}
 			disabled={disabled}
-			title={disabled ? 'Coming in Move 03' : undefined}
+			title={disabled ? 'Disabled in this context' : undefined}
 			style={{
 				background: 'transparent',
 				border: `1px solid ${disabled ? PANEL_BORDER : color}`,
