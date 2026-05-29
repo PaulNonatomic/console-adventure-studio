@@ -19,6 +19,15 @@
 import type { AdventureJson } from 'console-adventure';
 
 const STORAGE_KEY = 'console-adventure-studio:saves';
+/**
+ * Single-slot draft. Holds the json the user was last editing
+ * (unsaved). Auto-populated by App's debounced effect on every
+ * json change; cleared on any explicit lifecycle transition
+ * (save / load / new / example) so the draft is always "where
+ * I was when I closed the tab," not "stale state from three
+ * sessions ago."
+ */
+const DRAFT_KEY = 'cas:draft';
 
 export interface SavedAdventure {
 	/** Display name shown in the load dialog. */
@@ -99,6 +108,63 @@ export function deleteSave(id: string): boolean {
 	if (!saves[id]) return false;
 	delete saves[id];
 	return writeAll(saves);
+}
+
+/* ─── draft (single-slot autosave) ────────────────────────── */
+
+/**
+ * Persist the in-progress adventure to the draft slot. Silently
+ * no-ops on storage failure -- the studio still works, the user
+ * just won't have a refresh-restore safety net.
+ */
+export function saveDraft(json: AdventureJson): void {
+	try {
+		localStorage.setItem(
+			DRAFT_KEY,
+			JSON.stringify({ json, savedAt: new Date().toISOString() })
+		);
+	} catch {
+		/* swallow */
+	}
+}
+
+/**
+ * Read the draft slot. Returns `null` when nothing is stored or
+ * the payload doesn't look like an AdventureJson (missing
+ * start / scenes). Defensive about shape because we own the
+ * write but the read can happen after a localStorage edit by a
+ * different version of the studio.
+ */
+export function loadDraft(): { json: AdventureJson; savedAt: string } | null {
+	try {
+		const raw = localStorage.getItem(DRAFT_KEY);
+		if (!raw) return null;
+		const parsed = JSON.parse(raw);
+		if (
+			!parsed ||
+			typeof parsed !== 'object' ||
+			!parsed.json ||
+			typeof parsed.json !== 'object' ||
+			!('start' in parsed.json) ||
+			!('scenes' in parsed.json)
+		) {
+			return null;
+		}
+		return {
+			json: parsed.json as AdventureJson,
+			savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : ''
+		};
+	} catch {
+		return null;
+	}
+}
+
+export function clearDraft(): void {
+	try {
+		localStorage.removeItem(DRAFT_KEY);
+	} catch {
+		/* swallow */
+	}
 }
 
 /**

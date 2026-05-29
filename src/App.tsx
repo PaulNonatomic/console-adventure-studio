@@ -81,7 +81,16 @@ import { layoutGraph } from './lib/layout';
 import { computeMaxScore } from 'console-adventure';
 import { FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
-import { createSave, updateSave, loadSave, storageAvailable } from './lib/storage';
+import {
+	createSave,
+	updateSave,
+	loadSave,
+	storageAvailable,
+	saveDraft,
+	loadDraft,
+	clearDraft
+} from './lib/storage';
+import { DraftBanner } from './components/DraftBanner';
 import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { Tour, clearTourSeen } from './components/Tour';
@@ -197,7 +206,18 @@ export default function App() {
 function AppInner() {
 	const confirm = useConfirm();
 	const prompt = usePrompt();
-	const [json, setJson] = useState<AdventureJson>(FOUNDRY_EXAMPLE);
+	// Restore the draft if one exists -- this lets a tab refresh
+	// preserve in-progress unsaved work. The decision is captured
+	// once at mount (useState initialiser) so a fresh draft
+	// written by the autosave effect below doesn't retrigger
+	// "Draft restored" on every render.
+	const [initialFromDraft] = useState(() => loadDraft());
+	const [json, setJson] = useState<AdventureJson>(
+		initialFromDraft?.json ?? FOUNDRY_EXAMPLE
+	);
+	const [draftRestored, setDraftRestored] = useState<string | null>(
+		initialFromDraft?.savedAt ?? null
+	);
 	const [jsonVersion, setJsonVersion] = useState(0);
 	const [selectedScene, setSelectedScene] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -215,7 +235,11 @@ function AppInner() {
 	// save / load / new. Drives the saved-state dot in the
 	// Toolbar. Lives in state rather than ref so the dot
 	// re-renders when it flips.
-	const [dirty, setDirty] = useState(false);
+	// A restored draft IS, by definition, unsaved -- seed the
+	// dirty flag accordingly so the saved-state dot starts amber
+	// and the autosave effect keeps writing the draft as the
+	// user resumes editing.
+	const [dirty, setDirty] = useState(initialFromDraft !== null);
 	// Boot overlay: shown once per browser unless the user
 	// ticks "don't show on boot" inside it. The persisted skip
 	// flag lives under `cas:skipBoot` — checked by
@@ -304,6 +328,19 @@ function AppInner() {
 	// here so the ValidationNote chip can read it without
 	// re-running the BFS on every render.
 	const validation = useMemo(() => validate(json), [json]);
+
+	// Autosave to the single-slot draft. Debounced 600ms so
+	// mid-word keystrokes don't thrash localStorage. Gated on
+	// `dirty` so the initial unmodified bootstrap state (foundry
+	// example, fresh new, just-loaded save) doesn't get
+	// auto-promoted to a draft -- otherwise a no-edit refresh
+	// would falsely show "Draft restored." Cleared on explicit
+	// lifecycle transitions elsewhere in this file.
+	useEffect(() => {
+		if (!dirty) return;
+		const t = setTimeout(() => saveDraft(json), 600);
+		return () => clearTimeout(t);
+	}, [json, dirty]);
 
 	// Seed useNodesState / useEdgesState with the computed
 	// graph on the FIRST render. Previously they started as
@@ -802,6 +839,7 @@ function AppInner() {
 		setSelectedScene(null);
 		setError(null);
 		setDirty(false);
+		clearDraft();
 		// Externally-loaded JSON is not yet associated with a
 		// localStorage entry; force a "Save as" on next save.
 		setCurrentSaveName(null);
@@ -814,6 +852,7 @@ function AppInner() {
 		setSelectedScene(null);
 		setError(null);
 		setDirty(false);
+		clearDraft();
 		setCurrentSaveName(null);
 		setCurrentSaveId(null);
 	}
@@ -826,6 +865,7 @@ function AppInner() {
 		setCurrentSaveName(null);
 		setCurrentSaveId(null);
 		setDirty(false);
+		clearDraft();
 	}
 
 	/**
@@ -842,6 +882,7 @@ function AppInner() {
 		setCurrentSaveName(null);
 		setCurrentSaveId(null);
 		setDirty(false);
+		clearDraft();
 	}
 
 	/**
@@ -865,6 +906,7 @@ function AppInner() {
 		setCurrentSaveName(null);
 		setCurrentSaveId(null);
 		setDirty(false);
+		clearDraft();
 	}
 
 	/**
@@ -905,6 +947,7 @@ function AppInner() {
 				return;
 			}
 			setDirty(false);
+		clearDraft();
 			return;
 		}
 		// Otherwise fall through to "save as".
@@ -929,6 +972,7 @@ function AppInner() {
 		setCurrentSaveId(id);
 		setCurrentSaveName(name);
 		setDirty(false);
+		clearDraft();
 	}
 
 	async function renameCurrent() {
@@ -973,12 +1017,14 @@ function AppInner() {
 		setCurrentSaveId(id);
 		setCurrentSaveName(name);
 		setDirty(false);
+		clearDraft();
 	}
 
 	function loadFromStorage(loadedJson: AdventureJson, name: string, id: string) {
 		setJson(loadedJson);
 		setJsonVersion((v) => v + 1);
 		setDirty(false);
+		clearDraft();
 		setSelectedScene(null);
 		setError(null);
 		setCurrentSaveName(name);
@@ -1044,6 +1090,12 @@ function AppInner() {
 
 			{showTour && <Tour onClose={() => setShowTour(false)} />}
 			{showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
+			{draftRestored !== null && (
+				<DraftBanner
+					savedAt={draftRestored}
+					onDismiss={() => setDraftRestored(null)}
+				/>
+			)}
 
 			{/* View-mode sub-bar — sits beneath the toolbar so
 			    it's always visible without competing with the
