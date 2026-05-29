@@ -45,7 +45,8 @@ import {
 	updateChoice,
 	addChoice,
 	deleteChoice,
-	deleteScene
+	deleteScene,
+	moveChoice
 } from '../lib/edit';
 import { useConfirm } from '../lib/confirm';
 
@@ -134,6 +135,54 @@ export function InlineSceneEditor({
 		cardX: number;
 		cardY: number;
 	} | null>(null);
+
+	// Choice-reorder drag state. `from` = index of the row the
+	// author grabbed by its grip; `overIndex` = index of the row
+	// the cursor is currently hovering. Set on grip mousedown,
+	// updated on mousemove against each row's bounding rect,
+	// committed via moveChoice() on mouseup.
+	const [reorder, setReorder] = useState<
+		{ from: number; overIndex: number } | null
+	>(null);
+	const choiceRowsRef = useRef<Map<number, HTMLDivElement | null>>(new Map());
+	useEffect(() => {
+		if (!reorder) return;
+		const onMove = (e: MouseEvent) => {
+			// Walk the rendered rows, find the one whose vertical
+			// midpoint the cursor is closest to. Using midpoints
+			// means small cursor twitches don't flicker the drop
+			// target back and forth between adjacent rows.
+			let best = reorder.from;
+			let bestDist = Infinity;
+			for (const [idx, el] of choiceRowsRef.current) {
+				if (!el) continue;
+				const rect = el.getBoundingClientRect();
+				const mid = rect.top + rect.height / 2;
+				const dist = Math.abs(e.clientY - mid);
+				if (dist < bestDist) {
+					bestDist = dist;
+					best = idx;
+				}
+			}
+			setReorder((curr) =>
+				curr && curr.overIndex !== best ? { ...curr, overIndex: best } : curr
+			);
+		};
+		const onUp = () => {
+			setReorder((curr) => {
+				if (curr && curr.from !== curr.overIndex) {
+					onJsonChange(moveChoice(json, sceneId, curr.from, curr.overIndex));
+				}
+				return null;
+			});
+		};
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+		return () => {
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+	}, [reorder, json, sceneId, onJsonChange]);
 
 	// Window-level mousemove / mouseup while dragging. Bound
 	// only while `dragging` is true so the listeners don't
@@ -357,7 +406,7 @@ export function InlineSceneEditor({
 				>
 					<FieldLabel>CHOICES</FieldLabel>
 					<span style={{ color: DIM, fontSize: 9 }}>
-						drag ⠿ to reorder · grab → to wire
+						drag ⠿ to reorder · drag the right-edge handle on the node to wire
 					</span>
 				</div>
 
@@ -365,6 +414,25 @@ export function InlineSceneEditor({
 					{scene.choices.map((c, i) => (
 						<ChoiceRow
 							key={i}
+							rowRef={(el) => {
+								if (el) choiceRowsRef.current.set(i, el);
+								else choiceRowsRef.current.delete(i);
+							}}
+							isDragging={reorder?.from === i}
+							isDropTarget={
+								reorder !== null &&
+								reorder.from !== i &&
+								reorder.overIndex === i
+							}
+							dropAbove={
+								reorder !== null &&
+								reorder.overIndex === i &&
+								reorder.from > i
+							}
+							onGripMouseDown={(e) => {
+								e.preventDefault();
+								setReorder({ from: i, overIndex: i });
+							}}
 							json={json}
 							sceneId={sceneId}
 							choiceIndex={i}
@@ -544,12 +612,25 @@ function FooterButton({
  * stacked-block layout from the right-panel SceneEditor so a
  * scene with 4–5 choices fits without scrolling.
  *
- * The grip column (`⠿`) is a visual affordance only in this
- * pass — reorder via pointer drag arrives in 2a-followup once
- * the wire handle (2b) is locked down. The → at the end is the
- * future wire-handle spot (also 2b).
+ * Reordering: mousedown on the grip column (`⠿`) starts a drag
+ * tracked by the parent. The parent re-emits each row with
+ * `isDragging` / `isDropTarget` set so the grabbed row dims and
+ * the row under the cursor shows an insertion indicator.
+ *
+ * Wiring: the actual drag-to-wire affordance is the per-row
+ * <Handle> on the SceneNode (right edge of each row on the
+ * graph, see SceneNode.tsx). Earlier versions of this card
+ * carried a `→` wire button here too; it was removed because
+ * having two drag sources for the same edge -- one on the
+ * card, one on the node directly beside it -- was redundant
+ * and made the row noisier than it needed to be.
  */
 function ChoiceRow({
+	rowRef,
+	isDragging,
+	isDropTarget,
+	dropAbove,
+	onGripMouseDown,
 	json,
 	sceneId,
 	choiceIndex,
@@ -560,6 +641,12 @@ function ChoiceRow({
 	onJsonChange,
 	onDelete
 }: {
+	rowRef: (el: HTMLDivElement | null) => void;
+	isDragging: boolean;
+	isDropTarget: boolean;
+	/** True when the cursor is over a row above the grabbed one. */
+	dropAbove: boolean;
+	onGripMouseDown: (e: React.MouseEvent) => void;
 	json: AdventureJson;
 	sceneId: string;
 	choiceIndex: number;
@@ -572,17 +659,55 @@ function ChoiceRow({
 }) {
 	return (
 		<div
+			ref={rowRef}
 			style={{
+				position: 'relative',
 				display: 'flex',
 				alignItems: 'center',
 				gap: 8,
 				padding: '6px 8px',
-				border: `1px solid ${PANEL_BORDER}`,
+				border: `1px solid ${
+					isDropTarget ? AMBER : isDragging ? AMBER : PANEL_BORDER
+				}`,
 				borderRadius: 6,
-				background: VOID
+				background: VOID,
+				opacity: isDragging ? 0.55 : 1,
+				boxShadow: isDragging ? `0 4px 12px ${AMBER}33` : 'none',
+				transition: 'opacity 80ms, box-shadow 80ms, border-color 80ms'
 			}}
 		>
-			<span style={{ color: DIM, cursor: 'grab', fontSize: 11 }} title="reorder (coming soon)">⠿</span>
+			{/* Insertion line: shows where the dragged row would
+			    land if released right now. Above this row when
+			    the cursor is over a row whose index is less than
+			    the source's; below otherwise. */}
+			{isDropTarget && (
+				<div
+					style={{
+						position: 'absolute',
+						left: 6,
+						right: 6,
+						top: dropAbove ? -3 : 'auto',
+						bottom: dropAbove ? 'auto' : -3,
+						height: 2,
+						background: PHOSPHOR,
+						borderRadius: 1,
+						pointerEvents: 'none'
+					}}
+				/>
+			)}
+			<span
+				onMouseDown={onGripMouseDown}
+				style={{
+					color: DIM,
+					cursor: isDragging ? 'grabbing' : 'grab',
+					fontSize: 11,
+					userSelect: 'none',
+					padding: '0 2px'
+				}}
+				title="drag to reorder"
+			>
+				⠿
+			</span>
 			<span style={{ color: AMBER, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
 				{choiceIndex + 1})
 			</span>
@@ -677,30 +802,6 @@ function ChoiceRow({
 					</option>
 				))}
 			</select>
-			<button
-				onClick={() => {
-					/* placeholder wire-handle, becomes draggable in 2b */
-				}}
-				title="wire to scene (coming in 2b)"
-				style={{
-					background: 'transparent',
-					border: `1px solid ${PANEL_BORDER}`,
-					borderRadius: '50%',
-					width: 22,
-					height: 22,
-					color: AMBER,
-					fontFamily: 'inherit',
-					fontSize: 11,
-					cursor: 'not-allowed',
-					display: 'inline-flex',
-					alignItems: 'center',
-					justifyContent: 'center',
-					lineHeight: 1,
-					opacity: 0.55
-				}}
-			>
-				→
-			</button>
 			<button
 				onClick={onDelete}
 				title="delete choice"
