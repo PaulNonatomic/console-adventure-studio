@@ -302,6 +302,111 @@ function AppInner() {
 	const [manualPositions, setManualPositions] = useState<
 		Map<string, { x: number; y: number }>
 	>(() => new Map());
+
+	// Undo / redo. `past` holds PRE-change snapshots; `future`
+	// holds states the user undid past. Both capped at
+	// HISTORY_CAP entries so the stack can't grow unbounded
+	// during a long session.
+	const HISTORY_CAP = 100;
+	const HISTORY_COALESCE_MS = 600;
+	interface HistoryEntry {
+		json: AdventureJson;
+	}
+	const [history, setHistory] = useState<{
+		past: HistoryEntry[];
+		future: HistoryEntry[];
+	}>({ past: [], future: [] });
+	// Pre-change snapshot reference. Updated synchronously when
+	// we apply undo / redo so the debounced snapshot effect
+	// doesn't fire spuriously on the very next render.
+	const previousJsonRef = useRef<AdventureJson>(json);
+	// Snapshot on a debounce so a burst of keystrokes turns
+	// into ONE history entry rather than one per character. The
+	// snapshot taken is the PREVIOUS json -- undo restores the
+	// state from before this edit, not after.
+	useEffect(() => {
+		const t = setTimeout(() => {
+			if (previousJsonRef.current !== json) {
+				setHistory((h) => ({
+					past: [...h.past, { json: previousJsonRef.current }].slice(
+						-HISTORY_CAP
+					),
+					future: []
+				}));
+				previousJsonRef.current = json;
+			}
+		}, HISTORY_COALESCE_MS);
+		return () => clearTimeout(t);
+	}, [json]);
+
+	const undo = useCallback(() => {
+		setHistory((h) => {
+			if (h.past.length === 0) return h;
+			const last = h.past[h.past.length - 1];
+			setJson(last.json);
+			previousJsonRef.current = last.json;
+			setJsonVersion((v) => v + 1);
+			return {
+				past: h.past.slice(0, -1),
+				future: [{ json }, ...h.future].slice(0, HISTORY_CAP)
+			};
+		});
+	}, [json]);
+
+	const redo = useCallback(() => {
+		setHistory((h) => {
+			if (h.future.length === 0) return h;
+			const next = h.future[0];
+			setJson(next.json);
+			previousJsonRef.current = next.json;
+			setJsonVersion((v) => v + 1);
+			return {
+				past: [...h.past, { json }].slice(-HISTORY_CAP),
+				future: h.future.slice(1)
+			};
+		});
+	}, [json]);
+
+	const clearHistory = useCallback(() => {
+		setHistory({ past: [], future: [] });
+		previousJsonRef.current = json;
+	}, [json]);
+
+	// Keyboard shortcuts. Cmd/Ctrl+Z = undo; Cmd/Ctrl+Shift+Z
+	// or Cmd/Ctrl+Y = redo. Skipped when focus is in an
+	// input/textarea so the browser's built-in text-edit undo
+	// still works inside the inline editor's fields.
+	const undoRef = useRef<() => void>(() => {});
+	const redoRef = useRef<() => void>(() => {});
+	useEffect(() => {
+		undoRef.current = undo;
+		redoRef.current = redo;
+	}, [undo, redo]);
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (!(e.metaKey || e.ctrlKey)) return;
+			const target = e.target as HTMLElement | null;
+			const tag = target?.tagName;
+			if (
+				tag === 'INPUT' ||
+				tag === 'TEXTAREA' ||
+				tag === 'SELECT' ||
+				target?.isContentEditable
+			) {
+				return;
+			}
+			const k = e.key.toLowerCase();
+			if (k === 'z' && !e.shiftKey) {
+				e.preventDefault();
+				undoRef.current();
+			} else if ((k === 'z' && e.shiftKey) || k === 'y') {
+				e.preventDefault();
+				redoRef.current();
+			}
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, []);
 	const handleFlowDirectionChange = useCallback((d: FlowDirection) => {
 		setFlowDirection(d);
 		saveFlowDirection(d);
@@ -997,6 +1102,7 @@ function AppInner() {
 		setError(null);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 		// Externally-loaded JSON is not yet associated with a
 		// localStorage entry; force a "Save as" on next save.
 		setCurrentSaveName(null);
@@ -1010,6 +1116,7 @@ function AppInner() {
 		setError(null);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 		setCurrentSaveName(null);
 		setCurrentSaveId(null);
 	}
@@ -1023,6 +1130,7 @@ function AppInner() {
 		setCurrentSaveId(null);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 	}
 
 	/**
@@ -1040,6 +1148,7 @@ function AppInner() {
 		setCurrentSaveId(null);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 	}
 
 	/**
@@ -1064,6 +1173,7 @@ function AppInner() {
 		setCurrentSaveId(null);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 	}
 
 	/**
@@ -1105,6 +1215,7 @@ function AppInner() {
 			}
 			setDirty(false);
 		clearDraft();
+		clearHistory();
 			return;
 		}
 		// Otherwise fall through to "save as".
@@ -1130,6 +1241,7 @@ function AppInner() {
 		setCurrentSaveName(name);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 	}
 
 	async function renameCurrent() {
@@ -1175,6 +1287,7 @@ function AppInner() {
 		setCurrentSaveName(name);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 	}
 
 	function loadFromStorage(loadedJson: AdventureJson, name: string, id: string) {
@@ -1182,6 +1295,7 @@ function AppInner() {
 		setJsonVersion((v) => v + 1);
 		setDirty(false);
 		clearDraft();
+		clearHistory();
 		setSelectedScene(null);
 		setError(null);
 		setCurrentSaveName(name);
@@ -1253,6 +1367,10 @@ function AppInner() {
 					setShowTour(true);
 				}}
 				onShowAbout={() => setShowAbout(true)}
+				onUndo={undo}
+				onRedo={redo}
+				canUndo={history.past.length > 0}
+				canRedo={history.future.length > 0}
 				onSaveAs={saveAs}
 				onRename={renameCurrent}
 				onDuplicate={duplicateCurrent}

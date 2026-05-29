@@ -39,6 +39,10 @@ interface Props {
 	onAutoLayout: () => void;
 	onResetZoom: () => void;
 	onFitToScreen: () => void;
+	onUndo: () => void;
+	onRedo: () => void;
+	canUndo: boolean;
+	canRedo: boolean;
 	onStartTour: () => void;
 	onShowAbout: () => void;
 	onSaveAs: () => void;
@@ -71,6 +75,10 @@ export function Toolbar(props: Props) {
 		onAutoLayout,
 		onResetZoom,
 		onFitToScreen,
+		onUndo,
+		onRedo,
+		canUndo,
+		canRedo,
 		onStartTour,
 		onShowAbout,
 		onSaveAs,
@@ -177,6 +185,15 @@ export function Toolbar(props: Props) {
 	];
 
 	const moreMenuItems: MenuItem[] = [
+		{ icon: '↶', label: 'Undo', kbd: '⌘Z', onClick: onUndo, disabled: !canUndo },
+		{
+			icon: '↷',
+			label: 'Redo',
+			kbd: '⌘⇧Z',
+			onClick: onRedo,
+			disabled: !canRedo
+		},
+		'-',
 		...(size !== 'desktop'
 			? [{ icon: '＋', label: 'New adventure', kbd: '⌘N', onClick: onNewAdventure }]
 			: []),
