@@ -85,11 +85,15 @@ import { createSave, updateSave, loadSave, storageAvailable } from './lib/storag
 import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { Tour, clearTourSeen } from './components/Tour';
+import { AboutDialog } from './components/AboutDialog';
+import { ValidationNote } from './components/ValidationNote';
+import { validate } from './lib/validate';
 import { ShipDialog } from './components/ShipDialog';
 import { InlineSceneEditor } from './components/InlineSceneEditor';
 import { EdgeEditor } from './components/EdgeEditor';
 import { ConfirmProvider, useConfirm } from './lib/confirm';
 import { PromptProvider, usePrompt } from './lib/prompt';
+import { SceneActionsProvider } from './lib/sceneActions';
 import { ScriptView } from './components/ScriptView';
 import { ViewToggle } from './components/ViewToggle';
 import { FlowDirectionToggle } from './components/FlowDirectionToggle';
@@ -221,6 +225,7 @@ function AppInner() {
 	// Foundry" choice and by the Toolbar ⋯ → Help/tour menu
 	// entry. Component handles its own seen-state persistence.
 	const [showTour, setShowTour] = useState(false);
+	const [showAbout, setShowAbout] = useState(false);
 	// Move 02a: when the user clicks ⤢ on the inline editor we
 	// want the right-panel SceneEditor to take focus. We don't
 	// deselect (the node is still the subject of editing) — we
@@ -295,6 +300,10 @@ function AppInner() {
 	const saveAvailable = useMemo(() => storageAvailable(), []);
 
 	const maxScore = useMemo(() => computeMaxScore(json), [json]);
+	// Same algorithm graph.ts and the ship dialog use. Memoised
+	// here so the ValidationNote chip can read it without
+	// re-running the BFS on every render.
+	const validation = useMemo(() => validate(json), [json]);
 
 	// Seed useNodesState / useEdgesState with the computed
 	// graph on the FIRST render. Previously they started as
@@ -977,6 +986,7 @@ function AppInner() {
 	}
 
 	return (
+		<SceneActionsProvider value={{ onPlayFromHere: handlePlayFromHere }}>
 		<div
 			style={{
 				height: '100vh',
@@ -1023,6 +1033,7 @@ function AppInner() {
 					clearTourSeen();
 					setShowTour(true);
 				}}
+				onShowAbout={() => setShowAbout(true)}
 				onSaveAs={saveAs}
 				onRename={renameCurrent}
 				onDuplicate={duplicateCurrent}
@@ -1032,6 +1043,7 @@ function AppInner() {
 			/>
 
 			{showTour && <Tour onClose={() => setShowTour(false)} />}
+			{showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
 
 			{/* View-mode sub-bar — sits beneath the toolbar so
 			    it's always visible without competing with the
@@ -1320,12 +1332,29 @@ function AppInner() {
 					    Lets them bring the floating card back without
 					    losing selection. Bottom-right so it's out of the
 					    way of the bottom-left controls hint. */}
+					{/* Floating validation summary -- magenta chip
+					    counting unreachable / dead-end / missing-
+					    target issues. Opens the ship dialog (which
+					    has the full breakdown) on click. */}
+					<ValidationNote
+						validation={validation}
+						onOpenShipDialog={() => setShowShipDialog(true)}
+					/>
+
 					{selectedScene && inlineCollapsed && (
 						<button
 							onClick={() => setInlineCollapsed(false)}
 							style={{
 								position: 'absolute',
-								bottom: 16,
+								// Shift up to clear the ValidationNote
+								// chip when the doc has any issues.
+								bottom:
+									validation.unreachable.length +
+										validation.deadEnds.length +
+										validation.missingTargets.length >
+									0
+										? 56
+										: 16,
 								right: 16,
 								background: PANEL,
 								color: AMBER,
@@ -1394,5 +1423,6 @@ function AppInner() {
 				)}
 			</div>
 		</div>
+		</SceneActionsProvider>
 	);
 }

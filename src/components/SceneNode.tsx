@@ -14,6 +14,7 @@ import { memo, type ReactNode } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { PANEL, PANEL_BORDER, PHOSPHOR, AMBER, MAGENTA, CYAN, TEXT, DIM } from '../lib/theme';
 import type { SceneNodeData } from '../lib/graph';
+import { useSceneActions } from '../lib/sceneActions';
 
 /**
  * Wrapped in `React.memo` so React Flow's selection toggle
@@ -24,6 +25,7 @@ import type { SceneNodeData } from '../lib/graph';
  */
 function SceneNodeImpl({ data, selected }: NodeProps) {
 	const d = data as SceneNodeData;
+	const actions = useSceneActions();
 	// Border priority: live (playtest) > selected > unreachable
 	// (magenta warning) > start > default. Live wins over selected
 	// because seeing where the playtest is matters more than the
@@ -66,6 +68,43 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 				opacity: d.isVisited ? 0.62 : 1
 			}}
 		>
+			{/* Bottom-right "play from here" badge. Hidden when
+			    there's no SceneActionsProvider in the tree
+			    (e.g. test fixtures). Reaches the same handler
+			    the inline editor's footer button uses, so the
+			    playtest can be booted at any scene without
+			    opening the card. */}
+			{actions && (
+				<button
+					onClick={(e) => {
+						e.stopPropagation();
+						actions.onPlayFromHere(d.sceneId);
+					}}
+					title="Play from this scene"
+					style={{
+						position: 'absolute',
+						bottom: -10,
+						right: 8,
+						background: PANEL,
+						border: `1px solid ${CYAN}`,
+						borderRadius: 10,
+						color: CYAN,
+						fontFamily: 'inherit',
+						fontSize: 9,
+						fontWeight: 700,
+						letterSpacing: '0.08em',
+						padding: '2px 8px',
+						lineHeight: 1,
+						cursor: 'pointer',
+						transition: 'background 120ms'
+					}}
+					onMouseEnter={(e) => (e.currentTarget.style.background = `${CYAN}22`)}
+					onMouseLeave={(e) => (e.currentTarget.style.background = PANEL)}
+				>
+					▶ PLAY
+				</button>
+			)}
+
 			{/* Top-left scene-id badge. Mirrors the right-side
 			    cluster's geometry so they read as a matched
 			    pair: identity on the left, status on the right.

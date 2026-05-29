@@ -131,6 +131,11 @@ export function ScriptView({
 				fontFamily: 'ui-monospace, "JetBrains Mono", monospace'
 			}}
 		>
+			{/* Inline keyframes for the selected-scene blinking
+			    cursor. Idempotent — browsers dedupe identical
+			    style nodes, and we only render one per mount of
+			    this view. */}
+			<style>{`@keyframes cas-cursor-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } }`}</style>
 			{/* Left rail — outline list + minimap. */}
 			<aside
 				style={{
@@ -595,13 +600,34 @@ function SceneBlock({
 			</div>
 
 			{/* Narration — auto-sizing textarea styled as prose.
-			    Lines split on \n become the narration array. */}
+			    Lines split on \n become the narration array. The
+			    selected scene gets a blinking lime cursor just
+			    after the textarea so the active edit slot is
+			    obvious at a glance even when the textarea isn't
+			    focused. Pure CSS — keyframes injected once at
+			    the top of the view. */}
 			<NarrationEditor
 				value={scene.narration.join('\n')}
 				onChange={(text) =>
 					onJsonChange(updateScene(json, sceneId, { narration: text.split('\n') }))
 				}
 			/>
+			{isSelected && (
+				<span
+					aria-hidden="true"
+					style={{
+						display: 'inline-block',
+						color: PHOSPHOR,
+						fontSize: 14,
+						lineHeight: 1,
+						marginLeft: 2,
+						transform: 'translateY(2px)',
+						animation: 'cas-cursor-blink 1s steps(1, end) infinite'
+					}}
+				>
+					▌
+				</span>
+			)}
 
 			{/* Choices */}
 			<div

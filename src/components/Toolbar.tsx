@@ -39,6 +39,7 @@ interface Props {
 	onAutoLayout: () => void;
 	onResetZoom: () => void;
 	onStartTour: () => void;
+	onShowAbout: () => void;
 	onSaveAs: () => void;
 	onRename: () => void;
 	onDuplicate: () => void;
@@ -69,6 +70,7 @@ export function Toolbar(props: Props) {
 		onAutoLayout,
 		onResetZoom,
 		onStartTour,
+		onShowAbout,
 		onSaveAs,
 		onRename,
 		onDuplicate,
@@ -204,12 +206,9 @@ export function Toolbar(props: Props) {
 		{ icon: '?', label: 'Help / tour', onClick: onStartTour },
 		{
 			icon: 'ⓘ',
-			label: `Build ${__BUILD_TAG__}`,
-			kbd: __BUILD_TIME__,
-			onClick: () => {
-				/* informational — built time shown as the kbd hint */
-			},
-			disabled: true
+			label: 'About…',
+			kbd: __BUILD_TAG__,
+			onClick: onShowAbout
 		}
 	];
 
