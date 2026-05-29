@@ -446,14 +446,25 @@ function AppInner() {
 
 	const handleSelectionChange = useCallback(
 		(params: OnSelectionChangeParams) => {
-			const node: Node | undefined = params.nodes[0];
-			if (!node || node.id === FINISH_NODE_ID) {
-				setSelectedScene(null);
+			// `selectedScene` / `selectedEdgeId` drive the inline
+			// editor card + edge editor, which only make sense
+			// with a single selection. With multiple selected we
+			// fall back to null so the editors close and the user
+			// can shape the multi-selection without floating UI
+			// fighting for screen space.
+			const sceneNodes = params.nodes.filter(
+				(n) => n.id !== FINISH_NODE_ID
+			);
+			if (sceneNodes.length === 1) {
+				setSelectedScene(sceneNodes[0].id);
 			} else {
-				setSelectedScene(node.id);
+				setSelectedScene(null);
 			}
-			const edge: Edge | undefined = params.edges[0];
-			setSelectedEdgeId(edge?.id ?? null);
+			if (params.edges.length === 1) {
+				setSelectedEdgeId(params.edges[0].id);
+			} else {
+				setSelectedEdgeId(null);
+			}
 		},
 		[]
 	);
@@ -535,7 +546,11 @@ function AppInner() {
 	}, []);
 
 	const handleNodeClick = useCallback(
-		(_e: React.MouseEvent, node: Node) => {
+		(e: React.MouseEvent, node: Node) => {
+			// Skip the click-to-deselect toggle when a modifier
+			// is held -- the user is multi-selecting, not
+			// trying to clear the previous pick.
+			if (e.shiftKey || e.metaKey || e.ctrlKey) return;
 			if (prevSelectedRef.current === node.id) {
 				// Toggle off — clear the selected flag on every
 				// node so React Flow's `onSelectionChange` fires
@@ -556,9 +571,12 @@ function AppInner() {
 	 * onSelectionChange handler picks it up.
 	 */
 	const handleEdgeClick = useCallback(
-		(_e: React.MouseEvent, edge: Edge) => {
+		(e: React.MouseEvent, edge: Edge) => {
+			// Skip the toggle on modifier-clicks -- user is
+			// multi-selecting.
+			if (e.shiftKey || e.metaKey || e.ctrlKey) return;
 			if (prevSelectedEdgeRef.current === edge.id) {
-				setRfEdges((prev) => prev.map((e) => ({ ...e, selected: false })));
+				setRfEdges((prev) => prev.map((edg) => ({ ...edg, selected: false })));
 				setSelectedEdgeId(null);
 			}
 		},
@@ -710,65 +728,133 @@ function AppInner() {
 	 * cleanly after deletion.
 	 */
 	const handleDeleteSelected = useCallback(async () => {
-		// Edge selection takes priority. "Delete the connection"
-		// = rewire that choice's `next` to null (terminal). The
-		// choice itself stays so the author keeps the label and
-		// points — they just need to be rewired (or left as a
-		// finish-leading option).
-		if (selectedEdgeId) {
-			const edge = rfEdges.find((e) => e.id === selectedEdgeId);
-			const data = edge?.data as
-				| { sceneId?: string; choiceIndex?: number }
-				| undefined;
-			if (!edge || data?.sceneId === undefined || data.choiceIndex === undefined) {
-				return;
+		// Pull ALL selected nodes + edges from React Flow's
+		// state, not just the "primary" single-selection ids.
+		// With multi-select enabled the user might have shift-
+		// dragged across 3 scenes + 4 edges; we need to delete
+		// the whole pick in one atomic json mutation.
+		const selectedNodes = rfNodes.filter(
+			(n) => n.selected && n.id !== FINISH_NODE_ID
+		);
+		const selectedEdges = rfEdges.filter((e) => e.selected);
+
+		// Edges take priority when no nodes are selected; if
+		// both kinds are picked we delete the scenes (which
+		// cascades to those edges anyway) and leave standalone
+		// edge picks alone.
+		if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
+
+		if (selectedNodes.length === 0 && selectedEdges.length > 0) {
+			// Pure-edge selection: rewire each choice's `next` to
+			// null. The choices themselves stay so the author
+			// keeps their labels + points.
+			const targets: Array<{ sceneId: string; choiceIndex: number; edgeId: string }> = [];
+			for (const edge of selectedEdges) {
+				const data = edge.data as
+					| { sceneId?: string; choiceIndex?: number }
+					| undefined;
+				if (data?.sceneId === undefined || data.choiceIndex === undefined) continue;
+				targets.push({
+					sceneId: data.sceneId,
+					choiceIndex: data.choiceIndex,
+					edgeId: edge.id
+				});
 			}
-			const fromScene = data.sceneId;
-			const choiceIndex = data.choiceIndex;
-			const choice = json.scenes[fromScene]?.choices[choiceIndex];
-			if (!choice) return;
+			if (targets.length === 0) return;
 			const ok = await confirm({
-				title: 'Delete connection',
-				message: (
-					<>
-						Remove the link from <strong>{fromScene}</strong> choice{' '}
-						<strong>
-							{choiceIndex + 1}) {choice.label}
-						</strong>{' '}
-						→ <strong>{edge.target}</strong>? The choice stays in the scene
-						but is rewired to <strong>finish</strong> (null).
-					</>
-				),
-				confirmLabel: 'Delete connection',
+				title:
+					targets.length === 1 ? 'Delete connection' : `Delete ${targets.length} connections`,
+				message:
+					targets.length === 1 ? (
+						<>
+							Remove this connection? The choice stays in its scene but is
+							rewired to <strong>finish</strong> (null).
+						</>
+					) : (
+						<>
+							Remove <strong>{targets.length}</strong> connections? Each choice
+							stays in its scene but is rewired to <strong>finish</strong>{' '}
+							(null).
+						</>
+					),
+				confirmLabel: 'Delete',
 				tone: 'danger'
 			});
 			if (!ok) return;
-			setJson(updateChoice(json, fromScene, choiceIndex, { next: null }));
+			let next = json;
+			for (const { sceneId, choiceIndex } of targets) {
+				next = updateChoice(next, sceneId, choiceIndex, { next: null });
+			}
+			setJson(next);
 			setRfEdges((prev) => prev.map((e) => ({ ...e, selected: false })));
 			setSelectedEdgeId(null);
 			return;
 		}
-		if (!selectedScene) return;
-		if (json.start === selectedScene) return;
+
+		// Otherwise we're deleting scenes. Filter out the start
+		// scene (engine refuses to remove it -- it'd have
+		// nowhere to begin). Bail silently if all picks were
+		// the start scene; show a tailored toast otherwise.
+		const deletable = selectedNodes.filter((n) => n.id !== json.start);
+		const skippedStart = selectedNodes.length - deletable.length;
+		if (deletable.length === 0) {
+			if (skippedStart > 0) {
+				setError(
+					'Can\'t delete the start scene. Set a different start in the inspector first.'
+				);
+			}
+			return;
+		}
+		const names = deletable.map((n) => n.id);
 		const ok = await confirm({
-			title: 'Delete scene',
-			message: (
-				<>
-					Delete scene <strong>{selectedScene}</strong>? Any choices pointing
-					here will be rewired to <strong>finish</strong> (null).
-				</>
-			),
+			title:
+				deletable.length === 1
+					? 'Delete scene'
+					: `Delete ${deletable.length} scenes`,
+			message:
+				deletable.length === 1 ? (
+					<>
+						Delete scene <strong>{names[0]}</strong>? Any choices pointing here
+						will be rewired to <strong>finish</strong> (null).
+						{skippedStart > 0 && (
+							<>
+								<br />
+								<span style={{ opacity: 0.7 }}>
+									(The start scene was also selected and will be skipped.)
+								</span>
+							</>
+						)}
+					</>
+				) : (
+					<>
+						Delete <strong>{deletable.length}</strong> scenes (
+						<code style={{ fontSize: 10 }}>{names.join(', ')}</code>)? Any
+						choices pointing at any of them will be rewired to{' '}
+						<strong>finish</strong> (null).
+						{skippedStart > 0 && (
+							<>
+								<br />
+								<span style={{ opacity: 0.7 }}>
+									(The start scene was also selected and will be skipped.)
+								</span>
+							</>
+						)}
+					</>
+				),
 			confirmLabel: 'Delete',
 			tone: 'danger'
 		});
 		if (!ok) return;
-		const next = deleteScene(json, selectedScene);
+		let next = json;
+		for (const node of deletable) {
+			next = deleteScene(next, node.id);
+		}
 		setJson(next);
 		setSelectedScene(null);
 		setRfNodes((prev) => prev.map((n) => ({ ...n, selected: false })));
+		setRfEdges((prev) => prev.map((e) => ({ ...e, selected: false })));
 	}, [
-		selectedScene,
-		selectedEdgeId,
+		rfNodes,
 		rfEdges,
 		json,
 		setRfNodes,
@@ -1434,9 +1520,9 @@ function AppInner() {
 							pointerEvents: 'none'
 						}}
 					>
-						scroll to zoom · drag to pan · click scenes or connections to
-						select · click again to deselect · Del to delete · Shift+L to
-						tidy
+						scroll to zoom · drag to pan · click to select · click again to
+						deselect · shift-click or shift-drag for multi-select · Del to
+						delete · Shift+L to tidy
 					</div>
 
 					{/* Restore-card chip — visible only when the user
