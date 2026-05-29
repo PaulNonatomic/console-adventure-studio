@@ -506,6 +506,42 @@ function AppInner() {
 	const reactFlow = useReactFlow();
 
 	/**
+	 * Camera follow-along during playtest. Whenever the live
+	 * scene id changes (start, choose, restart), tween the
+	 * camera to centre on the new node so the author doesn't
+	 * have to pan to find what just lit up.
+	 *
+	 * Preserves the user's current zoom so the tween doesn't
+	 * fight a wider/narrower view they've deliberately chosen.
+	 * 500ms duration matches React Flow's own fitView default
+	 * and reads as "smoothly following" without feeling sluggish.
+	 *
+	 * Skipped in write mode (no canvas), and when the live
+	 * scene's node isn't on screen yet (e.g. mid-rebuild after
+	 * a structural edit -- the next render will retrigger).
+	 */
+	useEffect(() => {
+		if (!liveSceneId) return;
+		if (viewMode === 'write') return;
+		const node = reactFlow.getNode(liveSceneId);
+		if (!node) return;
+		// Node position is the top-left in flow space; we want
+		// the centre. SceneNode is a fixed 300px wide; height
+		// varies with choice count but ~140 is a workable
+		// midpoint for the framing.
+		const NODE_WIDTH = 300;
+		const NODE_HEIGHT_ESTIMATE = 140;
+		reactFlow.setCenter(
+			node.position.x + NODE_WIDTH / 2,
+			node.position.y + NODE_HEIGHT_ESTIMATE / 2,
+			{
+				duration: 500,
+				zoom: reactFlow.getZoom()
+			}
+		);
+	}, [liveSceneId, viewMode, reactFlow]);
+
+	/**
 	 * Re-run layoutGraph and overwrite every node's position.
 	 * Useful after the user has hand-dragged nodes around the
 	 * canvas — React Flow lets them park nodes wherever, but
