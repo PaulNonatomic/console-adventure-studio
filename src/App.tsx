@@ -91,6 +91,7 @@ import {
 	clearDraft
 } from './lib/storage';
 import { DraftBanner } from './components/DraftBanner';
+import { Toast } from './components/Toast';
 import { updateChoice, addSceneFromChoice, deleteScene } from './lib/edit';
 import { BootOverlay, shouldShowBootOverlay } from './components/BootOverlay';
 import { Tour, clearTourSeen } from './components/Tour';
@@ -562,6 +563,25 @@ function AppInner() {
 			}
 		},
 		[setRfEdges]
+	);
+
+	/**
+	 * Pin the node at the position the user dragged it to so
+	 * the next layoutGraph rebuild doesn't snap it back to the
+	 * BFS grid. Same `manualPositions` map drop-to-create
+	 * populates -- "Auto layout" (Shift+L) is the universal
+	 * "tidy back to the grid" reset for both.
+	 */
+	const handleNodeDragStop = useCallback(
+		(_e: React.MouseEvent, node: Node) => {
+			if (node.id === FINISH_NODE_ID) return;
+			setManualPositions((curr) => {
+				const next = new Map(curr);
+				next.set(node.id, { x: node.position.x, y: node.position.y });
+				return next;
+			});
+		},
+		[]
 	);
 
 	// React Flow instance — used by the auto-layout button to
@@ -1116,11 +1136,27 @@ function AppInner() {
 				onPlay={() => setRightTab('play')}
 				onAutoLayout={handleAutoLayout}
 				onResetZoom={() => {
+					// Snap back to the canonical zoom on the start +
+					// successors -- the same framing the canvas had
+					// on its very first render. Useful when the user
+					// has zoomed deep or panned far and wants the
+					// "home" view back without losing layout.
 					reactFlow.fitView({
 						padding: 0.15,
 						duration: 400,
 						minZoom: DEFAULT_ZOOM,
 						maxZoom: DEFAULT_ZOOM
+					});
+				}}
+				onFitToScreen={() => {
+					// Fit the entire graph (all nodes) to the
+					// viewport, no zoom constraint. The Move 06
+					// spec listed this distinct from Reset zoom:
+					// reset = back to canonical framing, fit-to-
+					// screen = "show me everything at once."
+					reactFlow.fitView({
+						padding: 0.12,
+						duration: 400
 					});
 				}}
 				onStartTour={() => {
@@ -1201,35 +1237,7 @@ function AppInner() {
 				/>
 			)}
 
-			{error && (
-				<div
-					style={{
-						background: '#2a1018',
-						color: MAGENTA,
-						borderBottom: `1px solid ${PANEL_BORDER}`,
-						padding: '8px 18px',
-						fontFamily: 'ui-monospace, "JetBrains Mono", monospace',
-						fontSize: 11,
-						display: 'flex',
-						justifyContent: 'space-between'
-					}}
-				>
-					<span>⚠ {error}</span>
-					<button
-						onClick={() => setError(null)}
-						style={{
-							background: 'transparent',
-							border: 'none',
-							color: AMBER,
-							cursor: 'pointer',
-							fontFamily: 'inherit',
-							fontSize: 11
-						}}
-					>
-						dismiss
-					</button>
-				</div>
-			)}
+			<Toast message={error} onDismiss={() => setError(null)} />
 
 			<MarkerDefs />
 
@@ -1321,6 +1329,7 @@ function AppInner() {
 						onConnect={handleConnect}
 						onConnectEnd={handleConnectEnd}
 						onNodeClick={handleNodeClick}
+						onNodeDragStop={handleNodeDragStop}
 						onEdgeClick={handleEdgeClick}
 						// Disable React Flow's built-in deletion key —
 						// it would remove the node from the rfNodes

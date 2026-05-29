@@ -38,6 +38,7 @@ interface Props {
 	onPlay: () => void;
 	onAutoLayout: () => void;
 	onResetZoom: () => void;
+	onFitToScreen: () => void;
 	onStartTour: () => void;
 	onShowAbout: () => void;
 	onSaveAs: () => void;
@@ -69,6 +70,7 @@ export function Toolbar(props: Props) {
 		onPlay,
 		onAutoLayout,
 		onResetZoom,
+		onFitToScreen,
 		onStartTour,
 		onShowAbout,
 		onSaveAs,
@@ -202,6 +204,7 @@ export function Toolbar(props: Props) {
 		'-',
 		{ icon: '⤢', label: 'Auto layout', kbd: '⇧L', onClick: onAutoLayout },
 		{ icon: '⊡', label: 'Reset zoom', onClick: onResetZoom },
+		{ icon: '⛶', label: 'Fit to screen', onClick: onFitToScreen },
 		'-',
 		{ icon: '?', label: 'Help / tour', onClick: onStartTour },
 		{
