@@ -272,6 +272,24 @@ function LeftPane({
 					onJumpToScene={onJumpToScene}
 				/>
 				<CheckRow
+					ok={validation.missingItemRefs.length === 0}
+					label={
+						validation.missingItemRefs.length === 0
+							? 'All item references resolve'
+							: `${validation.missingItemRefs.length} dangling item reference${validation.missingItemRefs.length === 1 ? '' : 's'}`
+					}
+					// Most refs live inside a scene (scene.items or a
+					// choice's requires/consumes/grants) so the jump
+					// lands on the offending scene. item-onUse refs
+					// (an item pointing at a missing scene) name the
+					// item id instead — clicking it just no-ops since
+					// it isn't a scene, which is harmless.
+					details={validation.missingItemRefs.map((r) =>
+						r.where.kind === 'item-onUse-scene' ? r.where.item : r.where.scene
+					)}
+					onJumpToScene={onJumpToScene}
+				/>
+				<CheckRow
 					ok={validation.ok}
 					label="Matches adventure.schema.json"
 					details={[]}

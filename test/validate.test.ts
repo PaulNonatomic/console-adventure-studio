@@ -32,6 +32,7 @@ describe('validate / clean adventure', () => {
 		expect(result.unreachable).toEqual([]);
 		expect(result.deadEnds).toEqual([]);
 		expect(result.missingTargets).toEqual([]);
+		expect(result.missingItemRefs).toEqual([]);
 	});
 
 	it('counts in-degree correctly', () => {
@@ -151,6 +152,83 @@ describe('validate / missing targets', () => {
 		};
 		const result = validate(json);
 		expect(result.inDegree).toEqual({ a: 0 });
+	});
+});
+
+describe('validate / missing item refs', () => {
+	it('clean when items exist and every reference resolves', () => {
+		const json: AdventureJson = {
+			start: 'a',
+			items: { key: { name: 'key', onUse: { inScenes: ['a'] } } },
+			scenes: {
+				a: {
+					heading: 'A',
+					narration: [],
+					items: ['key'],
+					choices: [
+						{ label: 'unlock', requires: ['key'], consumes: ['key'], next: null }
+					]
+				}
+			}
+		};
+		const result = validate(json);
+		expect(result.missingItemRefs).toEqual([]);
+		expect(result.ok).toBe(true);
+	});
+
+	it('flags an undefined item in scene.items', () => {
+		const json: AdventureJson = {
+			start: 'a',
+			items: { key: { name: 'key' } },
+			scenes: {
+				a: {
+					heading: 'A',
+					narration: [],
+					items: ['key', 'ghost'],
+					choices: [{ label: 'end', next: null }]
+				}
+			}
+		};
+		const result = validate(json);
+		expect(result.ok).toBe(false);
+		expect(result.missingItemRefs).toContainEqual({
+			where: { kind: 'scene-items', scene: 'a' },
+			id: 'ghost'
+		});
+	});
+
+	it('flags undefined items in choice requires/consumes/grants', () => {
+		const json: AdventureJson = {
+			start: 'a',
+			items: {},
+			scenes: {
+				a: {
+					heading: 'A',
+					narration: [],
+					choices: [
+						{ label: 'go', requires: ['phantom'], grants: ['nope'], next: null }
+					]
+				}
+			}
+		};
+		const result = validate(json);
+		const ids = result.missingItemRefs.map((r) => r.id).sort();
+		expect(ids).toEqual(['nope', 'phantom']);
+	});
+
+	it('flags an onUse.inScenes id that is not a real scene', () => {
+		const json: AdventureJson = {
+			start: 'a',
+			items: { map: { name: 'map', onUse: { inScenes: ['nowhere'] } } },
+			scenes: {
+				a: { heading: 'A', narration: [], choices: [{ label: 'end', next: null }] }
+			}
+		};
+		const result = validate(json);
+		expect(result.missingItemRefs).toContainEqual({
+			where: { kind: 'item-onUse-scene', item: 'map' },
+			id: 'nowhere'
+		});
 	});
 });
 
