@@ -30,6 +30,7 @@ interface Props {
 	dirty: boolean;
 	stats: { scenes: number; maxScore: number };
 	onLoadExample: () => void;
+	onLoadFoundryExample: () => void;
 	onLoadJson: (json: unknown) => void;
 	onNewAdventure: () => void;
 	onSave: () => void;
@@ -67,6 +68,7 @@ export function Toolbar(props: Props) {
 		dirty,
 		stats,
 		onLoadExample,
+		onLoadFoundryExample,
 		onLoadJson,
 		onNewAdventure,
 		onSave,
@@ -181,6 +183,7 @@ export function Toolbar(props: Props) {
 
 	const openMenuItems: MenuItem[] = [
 		{ icon: '◆', label: 'Example adventure', onClick: onLoadExample },
+		{ icon: '◇', label: 'Example 2: The Foundry', onClick: onLoadFoundryExample },
 		{ icon: '↑', label: 'Upload file…', kbd: '⌘O', onClick: triggerFilePicker },
 		{ icon: '◎', label: 'From URL…', onClick: handleFetchUrl },
 		{ icon: '⌶', label: 'Paste JSON', onClick: handlePaste }

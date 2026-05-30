@@ -1,7 +1,7 @@
 /**
  * Guided tour (Move 01 follow-up) — 4-step coachmark sequence
  * pointing at the studio's core surfaces. Triggered by the boot
- * overlay's "Tour the Foundry" choice, or re-launched from the
+ * overlay's "Take the tour" choice, or re-launched from the
  * Toolbar ⋯ → "Help / tour" menu item.
  *
  * Per-step rendering:

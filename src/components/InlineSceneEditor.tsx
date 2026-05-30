@@ -344,7 +344,7 @@ export function InlineSceneEditor({
 							whiteSpace: 'nowrap'
 						}}
 					>
-						<span style={{ color: PHOSPHOR }}>~/foundry</span>
+						<span style={{ color: PHOSPHOR }}>~/adventure</span>
 						<span style={{ margin: '0 6px' }}>·</span>
 						<span style={{ color: TEXT }}>{scene.heading}</span>
 					</span>

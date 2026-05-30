@@ -776,6 +776,12 @@ function ShareTab({
 						padding: '14px 16px'
 					}}
 				>
+					{/* Card title: derives from the adventure's intro
+					    first line if present, falling back to a
+					    generic label. This used to be hardcoded
+					    "▶ THE FOUNDRY" -- specific to the foundry
+					    example. Authoring a different adventure
+					    now shows that adventure's banner. */}
 					<div
 						style={{
 							color: MAGENTA,
@@ -785,7 +791,7 @@ function ShareTab({
 							marginBottom: 6
 						}}
 					>
-						▶ THE FOUNDRY
+						▶ {(json.intro?.[0] ?? 'ADVENTURE').toUpperCase()}
 					</div>
 					<div
 						style={{

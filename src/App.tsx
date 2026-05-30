@@ -79,7 +79,7 @@ import { LoadDialog } from './components/LoadDialog';
 import { buildGraph, FINISH_NODE_ID, ARROW_MARKER_ID } from './lib/graph';
 import { layoutGraph } from './lib/layout';
 import { computeMaxScore } from 'console-adventure';
-import { FOUNDRY_EXAMPLE } from './lib/examples';
+import { EXAMPLE_ADVENTURE, FOUNDRY_EXAMPLE } from './lib/examples';
 import { BLANK_ADVENTURE, STARTER_ADVENTURE } from './lib/blank';
 import {
 	createSave,
@@ -215,7 +215,7 @@ function AppInner() {
 	// "Draft restored" on every render.
 	const [initialFromDraft] = useState(() => loadDraft());
 	const [json, setJson] = useState<AdventureJson>(
-		initialFromDraft?.json ?? FOUNDRY_EXAMPLE
+		initialFromDraft?.json ?? EXAMPLE_ADVENTURE
 	);
 	const [draftRestored, setDraftRestored] = useState<string | null>(
 		initialFromDraft?.savedAt ?? null
@@ -247,8 +247,8 @@ function AppInner() {
 	// flag lives under `cas:skipBoot` — checked by
 	// `shouldShowBootOverlay()` so the read is encapsulated.
 	const [showBoot, setShowBoot] = useState<boolean>(() => shouldShowBootOverlay());
-	// Guided tour. Triggered by the boot overlay's "Tour the
-	// Foundry" choice and by the Toolbar ⋯ → Help/tour menu
+	// Guided tour. Triggered by the boot overlay's "Take the
+	// tour" choice and by the Toolbar ⋯ → Help/tour menu
 	// entry. Component handles its own seen-state persistence.
 	const [showTour, setShowTour] = useState(false);
 	const [showAbout, setShowAbout] = useState(false);
@@ -460,7 +460,7 @@ function AppInner() {
 
 	// Autosave to the single-slot draft. Debounced 600ms so
 	// mid-word keystrokes don't thrash localStorage. Gated on
-	// `dirty` so the initial unmodified bootstrap state (foundry
+	// `dirty` so the initial unmodified bootstrap state (the
 	// example, fresh new, just-loaded save) doesn't get
 	// auto-promoted to a draft -- otherwise a no-edit refresh
 	// would falsely show "Draft restored." Cleared on explicit
@@ -1124,6 +1124,24 @@ function AppInner() {
 	}
 
 	function loadExample() {
+		// Default example -- the small "three paths, one
+		// clearing" branching narrative. Neutral framing so the
+		// structure is the lesson, not the theme.
+		setJson(EXAMPLE_ADVENTURE);
+		setJsonVersion((v) => v + 1);
+		setSelectedScene(null);
+		setError(null);
+		setDirty(false);
+		clearDraft();
+		clearHistory();
+		setCurrentSaveName(null);
+		setCurrentSaveId(null);
+	}
+
+	function loadFoundryExample() {
+		// Second example -- the themed seven-scene foundry
+		// piece. Kept selectable because some authors used it
+		// as a reference.
 		setJson(FOUNDRY_EXAMPLE);
 		setJsonVersion((v) => v + 1);
 		setSelectedScene(null);
@@ -1166,17 +1184,16 @@ function AppInner() {
 	}
 
 	/**
-	 * Boot overlay's "tour the foundry" path. The example is
+	 * Boot overlay's "take the tour" path. The example is
 	 * already the default; this just ensures we're on it and
 	 * preselects the start scene so the inspector shows scene
 	 * content rather than the adventure-level view. Then kicks
-	 * off the 4-step coachmark sequence in Tour.tsx -- deferred
-	 * the first time around, shipped now.
+	 * off the 4-step coachmark sequence in Tour.tsx.
 	 */
-	function tourFoundry() {
-		setJson(FOUNDRY_EXAMPLE);
+	function startTour() {
+		setJson(EXAMPLE_ADVENTURE);
 		setJsonVersion((v) => v + 1);
-		setSelectedScene(FOUNDRY_EXAMPLE.start);
+		setSelectedScene(EXAMPLE_ADVENTURE.start);
 		setError(null);
 		// Defer the tour to next tick so the boot overlay has
 		// time to unmount and the canvas has rendered the new
@@ -1369,6 +1386,12 @@ function AppInner() {
 		},
 		// Open menu items
 		{ id: 'openExample', icon: '◆', label: 'Open: example adventure', onRun: loadExample },
+		{
+			id: 'openFoundry',
+			icon: '◇',
+			label: 'Open: the foundry (example 2)',
+			onRun: loadFoundryExample
+		},
 		// Edit
 		{
 			id: 'undo',
@@ -1476,7 +1499,7 @@ function AppInner() {
 			{showBoot && (
 				<BootOverlay
 					onClose={() => setShowBoot(false)}
-					onTour={tourFoundry}
+					onTour={startTour}
 					onSkeleton={newFromSkeleton}
 					onLoadJson={loadJson}
 					onError={setError}
@@ -1488,6 +1511,7 @@ function AppInner() {
 				dirty={dirty}
 				stats={{ scenes: Object.keys(json.scenes).length, maxScore }}
 				onLoadExample={loadExample}
+				onLoadFoundryExample={loadFoundryExample}
 				onLoadJson={loadJson}
 				onNewAdventure={newAdventure}
 				onSave={saveCurrent}

@@ -6,7 +6,7 @@
  * from. Frames the three onboarding paths *as* the product's
  * own `choose(1..3)` grammar:
  *
- *   1. Tour the Foundry — the built-in example
+ *   1. Take the tour — load the built-in example adventure + walkthrough
  *   2. Start from a skeleton — three-scene branching scaffold
  *   3. Bring your own — paste / upload / fetch URL
  *
@@ -44,7 +44,7 @@ export function shouldShowBootOverlay(): boolean {
 
 interface Props {
 	onClose: () => void;
-	/** Choice 1 — load the foundry example, optionally trigger a tour. */
+	/** Choice 1 — load the example adventure and trigger the guided tour. */
 	onTour: () => void;
 	/** Choice 2 — load the three-scene branching scaffold. */
 	onSkeleton: () => void;
@@ -214,10 +214,10 @@ export function BootOverlay({
 				<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 					<ChoiceButton
 						index={1}
-						title="Tour the Foundry"
+						title="Take the tour"
 						tag="GUIDED"
 						tagColor={CYAN}
-						body="Walk the built-in example with callouts — see how scenes, choices, tiers and the playtest fit together."
+						body="Walk the example adventure with callouts — see how scenes, choices, tiers and the playtest fit together."
 						onClick={() => pick(onTour)}
 					/>
 					<ChoiceButton
@@ -281,7 +281,7 @@ function BootHeader() {
 			</div>
 			<div>
 				<span style={{ color: DIM }}>&gt;</span> loaded engine ·
-				console-adventure v0.4 · foundry example ready
+				console-adventure v0.4 · example adventure ready
 			</div>
 			<div>
 				<span style={{ color: DIM }}>&gt;</span> ready{' '}

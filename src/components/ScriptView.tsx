@@ -548,7 +548,7 @@ function SceneBlock({
 					flexWrap: 'wrap'
 				}}
 			>
-				<span style={{ color: PHOSPHOR, fontSize: 12 }}>~/foundry</span>
+				<span style={{ color: PHOSPHOR, fontSize: 12 }}>~/adventure</span>
 				<span style={{ color: DIM, fontSize: 12 }}>·</span>
 				<EditableHeading
 					value={scene.heading}
