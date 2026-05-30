@@ -110,7 +110,10 @@ interface AnchorRect {
 }
 
 const TOOLTIP_WIDTH = 320;
-const TOOLTIP_OFFSET = 14;
+// Offset must clear the highlight halo (HALO = 14 inside Tour
+// below) plus a few px of breathing room, otherwise the
+// tooltip's edge touches the highlight outline.
+const TOOLTIP_OFFSET = 22;
 const VIEWPORT_MARGIN = 16;
 
 export function Tour({ onClose }: Props) {
@@ -194,17 +197,21 @@ export function Tour({ onClose }: Props) {
 		}
 	};
 
-	// Highlight rectangle around the target.
+	// Highlight rectangle around the target. Padded out so the
+	// outline breathes around the target instead of hugging it
+	// flush -- a 14px halo around a scene node reads as "look
+	// here," whereas a tight outline reads as a re-selection.
+	const HALO = 14;
 	const highlightStyle: CSSProperties | null = anchor
 		? {
 				position: 'fixed',
-				left: anchor.x - 6,
-				top: anchor.y - 6,
-				width: anchor.width + 12,
-				height: anchor.height + 12,
+				left: anchor.x - HALO,
+				top: anchor.y - HALO,
+				width: anchor.width + HALO * 2,
+				height: anchor.height + HALO * 2,
 				border: `2px solid ${PHOSPHOR}`,
-				borderRadius: 10,
-				boxShadow: `0 0 0 6px ${PHOSPHOR}22, 0 0 32px ${PHOSPHOR}66`,
+				borderRadius: 14,
+				boxShadow: `0 0 0 6px ${PHOSPHOR}22, 0 0 36px ${PHOSPHOR}66`,
 				pointerEvents: 'none',
 				zIndex: 200,
 				transition: 'left 200ms ease, top 200ms ease, width 200ms ease, height 200ms ease'
