@@ -19,9 +19,11 @@ import {
 	updateChoice,
 	addChoice,
 	deleteChoice,
-	deleteScene
+	deleteScene,
+	setSceneItems
 } from '../lib/edit';
 import { useConfirm } from '../lib/confirm';
+import { ChoiceItemGating } from './ChoiceItemGating';
 
 interface Props {
 	json: AdventureJson;
@@ -88,6 +90,17 @@ export function SceneEditor({ json, sceneId, onJsonChange, onSelectScene }: Prop
 					onJsonChange(updateScene(json, sceneId, { narration: text.split('\n') }))
 				}
 			/>
+
+			{json.items && Object.keys(json.items).length > 0 && (
+				<>
+					<div style={sectionLabel}>ITEMS HERE (at scene start)</div>
+					<SceneItemsPicker
+						json={json}
+						sceneId={sceneId}
+						onJsonChange={onJsonChange}
+					/>
+				</>
+			)}
 
 			<div style={sectionLabel}>CHOICES</div>
 			<div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -159,6 +172,12 @@ export function SceneEditor({ json, sceneId, onJsonChange, onSelectScene }: Prop
 								onJsonChange(updateChoice(json, sceneId, i, { flavour: flavour || undefined }))
 							}
 						/>
+						<ChoiceItemGating
+							json={json}
+							sceneId={sceneId}
+							choiceIndex={i}
+							onJsonChange={onJsonChange}
+						/>
 					</div>
 				))}
 			</div>
@@ -202,5 +221,54 @@ export function SceneEditor({ json, sceneId, onJsonChange, onSelectScene }: Prop
 				/>
 			</div>
 		</>
+	);
+}
+
+/* ─── scene-items chip picker ──────────────────────────── */
+
+function SceneItemsPicker({
+	json,
+	sceneId,
+	onJsonChange
+}: {
+	json: AdventureJson;
+	sceneId: string;
+	onJsonChange: (next: AdventureJson) => void;
+}) {
+	const allItems = Object.keys(json.items ?? {}).sort();
+	const current = new Set(json.scenes[sceneId]?.items ?? []);
+	return (
+		<div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+			{allItems.map((id) => {
+				const on = current.has(id);
+				const name = json.items?.[id]?.name ?? id;
+				return (
+					<button
+						key={id}
+						title={`${id} — ${name}`}
+						onClick={() => {
+							const next = new Set(current);
+							if (on) next.delete(id);
+							else next.add(id);
+							onJsonChange(setSceneItems(json, sceneId, [...next]));
+						}}
+						style={{
+							background: on ? `${PHOSPHOR}22` : 'transparent',
+							color: on ? PHOSPHOR : DIM,
+							border: `1px solid ${on ? PHOSPHOR : PANEL_BORDER}`,
+							borderRadius: 10,
+							padding: '2px 9px',
+							fontFamily: 'inherit',
+							fontSize: 10,
+							cursor: 'pointer',
+							letterSpacing: '0.02em',
+							transition: 'background 120ms, color 120ms, border-color 120ms'
+						}}
+					>
+						{name}
+					</button>
+				);
+			})}
+		</div>
 	);
 }

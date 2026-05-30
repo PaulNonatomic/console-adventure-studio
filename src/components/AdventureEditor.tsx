@@ -15,6 +15,7 @@ import {
 	colorForTierSlot
 } from '../lib/theme';
 import { Input, NumberInput, Textarea, Select, Button } from './Inputs';
+import { ItemsEditor } from './ItemsEditor';
 import { downloadAdventure, copyAdventureToClipboard } from '../lib/exportAdventure';
 import {
 	setStart,
@@ -163,6 +164,8 @@ export function AdventureEditor({ json, maxScore, onJsonChange, onSelectScene }:
 				small
 				onClick={() => onJsonChange(addTier(json))}
 			/>
+
+			<ItemsEditor json={json} onJsonChange={onJsonChange} />
 
 			<div style={sectionLabel}>SHARE</div>
 			<div style={{ marginBottom: 8 }}>

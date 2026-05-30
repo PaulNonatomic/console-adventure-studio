@@ -37,6 +37,7 @@ import {
 	VOID
 } from '../lib/theme';
 import { updateChoice } from '../lib/edit';
+import { ChoiceItemGating } from './ChoiceItemGating';
 
 interface Props {
 	json: AdventureJson;
@@ -336,6 +337,13 @@ export function EdgeEditor({
 						}
 					/>
 				</FieldRow>
+
+				<ChoiceItemGating
+					json={json}
+					sceneId={sceneId}
+					choiceIndex={choiceIndex}
+					onJsonChange={onJsonChange}
+				/>
 			</div>
 		</div>,
 		document.body

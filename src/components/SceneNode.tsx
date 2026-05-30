@@ -139,7 +139,11 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 
 			{/* Top-right validation badges. Stacked horizontally
 			    so a node with multiple issues shows all of them. */}
-			{(d.isUnreachable || d.isDeadEnd || d.hasMissingTarget || d.inDegree > 0) && (
+			{(d.isUnreachable ||
+				d.isDeadEnd ||
+				d.hasMissingTarget ||
+				d.inDegree > 0 ||
+				d.itemCount > 0) && (
 				<div
 					style={{
 						position: 'absolute',
@@ -150,6 +154,14 @@ function SceneNodeImpl({ data, selected }: NodeProps) {
 						pointerEvents: 'none'
 					}}
 				>
+					{d.itemCount > 0 && (
+						<Badge
+							color={PHOSPHOR}
+							title={`${d.itemCount} item(s) start in this scene`}
+						>
+							◆ {d.itemCount}
+						</Badge>
+					)}
 					{d.inDegree > 0 && (
 						<Badge color={DIM} title={`${d.inDegree} choice(s) point here`}>
 							← {d.inDegree}

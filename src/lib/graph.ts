@@ -97,6 +97,13 @@ export interface SceneNodeData extends Record<string, unknown> {
 	isLive: boolean;
 	isVisited: boolean;
 	/**
+	 * Number of items present in this scene at the start of a
+	 * run, from `Scene.items`. Drives the small ◆ badge on the
+	 * SceneNode so authors can see at a glance which scenes
+	 * carry pickable items.
+	 */
+	itemCount: number;
+	/**
 	 * Current global flow direction. Threaded onto every scene
 	 * node so SceneNode can pick the correct target-handle edge
 	 * (Left when horizontal, Top when vertical). Denorm but
@@ -169,6 +176,7 @@ export function buildGraph(
 				inDegree: v.inDegree[sceneId] ?? 0,
 				isLive: sceneId === liveSceneId,
 				isVisited: visitedSet.has(sceneId) && sceneId !== liveSceneId,
+				itemCount: scene.items?.length ?? 0,
 				flowDirection
 			} satisfies SceneNodeData
 		});

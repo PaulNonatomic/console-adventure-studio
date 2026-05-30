@@ -30,6 +30,16 @@ export interface MissingTarget {
 	target: string;
 }
 
+export interface MissingItemRef {
+	/** Where the dangling id was found. */
+	where:
+		| { kind: 'scene-items'; scene: string }
+		| { kind: 'choice'; scene: string; choiceIndex: number; field: 'requires' | 'consumes' | 'grants' }
+		| { kind: 'item-onUse-scene'; item: string };
+	/** The id that doesn't resolve. */
+	id: string;
+}
+
 export interface Validation {
 	/** Scene ids never visited starting BFS from `json.start`. */
 	unreachable: string[];
@@ -39,6 +49,13 @@ export interface Validation {
 	missingTargets: MissingTarget[];
 	/** Map of scene id → how many choices (across all scenes) point at it. */
 	inDegree: Record<string, number>;
+	/**
+	 * Item ids referenced from scenes / choices / item.onUse.inScenes
+	 * that aren't in the catalogue (or the other direction --
+	 * scene ids in `onUse.inScenes` that don't exist). Lets the
+	 * studio flag these before they bite at runtime.
+	 */
+	missingItemRefs: MissingItemRef[];
 	/** `true` when every check passes — convenience flag for the UI. */
 	ok: boolean;
 }
@@ -105,12 +122,52 @@ export function validate(json: AdventureJson): Validation {
 		});
 	}
 
+	// ─── missing item refs: walk scene.items, choice
+	// requires/consumes/grants, and item.onUse.inScenes to make
+	// sure every id resolves.
+	const items = json.items ?? {};
+	const itemSet = new Set(Object.keys(items));
+	const missingItemRefs: MissingItemRef[] = [];
+	for (const [sceneId, scene] of Object.entries(json.scenes)) {
+		for (const id of scene.items ?? []) {
+			if (!itemSet.has(id)) {
+				missingItemRefs.push({
+					where: { kind: 'scene-items', scene: sceneId },
+					id
+				});
+			}
+		}
+		scene.choices.forEach((c, choiceIndex) => {
+			(['requires', 'consumes', 'grants'] as const).forEach((field) => {
+				for (const id of c[field] ?? []) {
+					if (!itemSet.has(id)) {
+						missingItemRefs.push({
+							where: { kind: 'choice', scene: sceneId, choiceIndex, field },
+							id
+						});
+					}
+				}
+			});
+		});
+	}
+	for (const [itemId, def] of Object.entries(items)) {
+		for (const sceneId of def.onUse?.inScenes ?? []) {
+			if (!sceneSet.has(sceneId)) {
+				missingItemRefs.push({
+					where: { kind: 'item-onUse-scene', item: itemId },
+					id: sceneId
+				});
+			}
+		}
+	}
+
 	const ok =
 		unreachable.length === 0 &&
 		deadEnds.length === 0 &&
-		missingTargets.length === 0;
+		missingTargets.length === 0 &&
+		missingItemRefs.length === 0;
 
-	return { unreachable, deadEnds, missingTargets, inDegree, ok };
+	return { unreachable, deadEnds, missingTargets, inDegree, missingItemRefs, ok };
 }
 
 /** Count of scenes that have at least one terminal (`next: null`) choice. */
