@@ -10,7 +10,15 @@
  * that renaming would require. Heading is the human-visible
  * label; the id is just a stable key.
  */
-import type { AdventureJson, Scene, Choice, Tier, JsonShareConfig } from 'console-adventure';
+import type {
+	AdventureJson,
+	Scene,
+	Choice,
+	Tier,
+	JsonShareConfig,
+	ItemDef,
+	ItemUseEffect
+} from 'console-adventure';
 import { omit, omitFromRecord } from './omit';
 
 // ─── scene edits ──────────────────────────────────────────────
@@ -224,4 +232,191 @@ export function toggleShare(json: AdventureJson, enabled: boolean): AdventureJso
 		return omit(json, 'share');
 	}
 	return json;
+}
+
+// ─── item edits (catalogue) ──────────────────────────────────
+
+/**
+ * Add a new item to the catalogue with an auto-generated id.
+ * Returns the new json plus the new item's id so the caller can
+ * immediately select / focus it. The id is generated similarly
+ * to `nextSceneId` -- prefer `item-N` where N is the smallest
+ * positive integer not in use.
+ */
+export function addItem(json: AdventureJson): { json: AdventureJson; id: string } {
+	const id = nextItemId(json);
+	return {
+		json: {
+			...json,
+			items: {
+				...(json.items ?? {}),
+				[id]: { name: id }
+			}
+		},
+		id
+	};
+}
+
+function nextItemId(json: AdventureJson): string {
+	const taken = new Set(Object.keys(json.items ?? {}));
+	let n = Object.keys(json.items ?? {}).length + 1;
+	while (taken.has(`item-${n}`)) n++;
+	return `item-${n}`;
+}
+
+/**
+ * Patch a single item in the catalogue. Missing items are
+ * returned untouched (caller bug -- the UI shouldn't be able
+ * to edit an item that doesn't exist).
+ */
+export function updateItem(
+	json: AdventureJson,
+	itemId: string,
+	partial: Partial<ItemDef>
+): AdventureJson {
+	const current = json.items?.[itemId];
+	if (!current) return json;
+	return {
+		...json,
+		items: {
+			...(json.items ?? {}),
+			[itemId]: { ...current, ...partial }
+		}
+	};
+}
+
+/**
+ * Patch an item's `onUse` effect. Pass `null` to remove the
+ * onUse field entirely (= "flavour-only item, no use effect").
+ */
+export function updateItemOnUse(
+	json: AdventureJson,
+	itemId: string,
+	patch: Partial<ItemUseEffect> | null
+): AdventureJson {
+	const current = json.items?.[itemId];
+	if (!current) return json;
+	if (patch === null) {
+		const { onUse: _, ...rest } = current;
+		return {
+			...json,
+			items: { ...(json.items ?? {}), [itemId]: rest }
+		};
+	}
+	return {
+		...json,
+		items: {
+			...(json.items ?? {}),
+			[itemId]: { ...current, onUse: { ...(current.onUse ?? {}), ...patch } }
+		}
+	};
+}
+
+/**
+ * Remove an item from the catalogue. ALSO scrubs every
+ * dangling reference -- scene.items lists, choice
+ * requires/consumes/grants arrays -- so the resulting json
+ * stays internally consistent. Without this, deleting a
+ * referenced item would leave choices gated by a phantom id
+ * the player can never obtain.
+ */
+export function deleteItem(json: AdventureJson, itemId: string): AdventureJson {
+	if (!json.items?.[itemId]) return json;
+	const items = omitFromRecord(json.items, itemId);
+	const scrubbedScenes: Record<string, Scene> = {};
+	for (const [id, scene] of Object.entries(json.scenes)) {
+		const scrubbedItems = scene.items?.filter((i) => i !== itemId);
+		const scrubbedChoices = scene.choices.map((c) => scrubChoiceItem(c, itemId));
+		const next: Scene = { ...scene, choices: scrubbedChoices };
+		if (scrubbedItems && scrubbedItems.length !== scene.items?.length) {
+			if (scrubbedItems.length === 0) {
+				const { items: _, ...rest } = next;
+				scrubbedScenes[id] = rest as Scene;
+				continue;
+			}
+			next.items = scrubbedItems;
+		}
+		scrubbedScenes[id] = next;
+	}
+	return { ...json, items, scenes: scrubbedScenes };
+}
+
+function scrubChoiceItem(choice: Choice, itemId: string): Choice {
+	const next: Choice = { ...choice };
+	if (next.requires) {
+		const r = next.requires.filter((i) => i !== itemId);
+		if (r.length === 0) delete next.requires;
+		else next.requires = r;
+	}
+	if (next.consumes) {
+		const c = next.consumes.filter((i) => i !== itemId);
+		if (c.length === 0) delete next.consumes;
+		else next.consumes = c;
+	}
+	if (next.grants) {
+		const g = next.grants.filter((i) => i !== itemId);
+		if (g.length === 0) delete next.grants;
+		else next.grants = g;
+	}
+	return next;
+}
+
+// ─── scene-item placement ────────────────────────────────────
+
+/**
+ * Replace a scene's static-item list. Passing an empty array
+ * removes the field entirely so the JSON stays minimal.
+ */
+export function setSceneItems(
+	json: AdventureJson,
+	sceneId: string,
+	itemIds: string[]
+): AdventureJson {
+	const scene = json.scenes[sceneId];
+	if (!scene) return json;
+	if (itemIds.length === 0) {
+		// Direct construction -- updateScene's spread can ADD
+		// fields but not REMOVE them. We want the field gone so
+		// the JSON stays minimal when the author clears it.
+		const { items: _omitted, ...rest } = scene;
+		return {
+			...json,
+			scenes: { ...json.scenes, [sceneId]: rest as Scene }
+		};
+	}
+	return updateScene(json, sceneId, { items: itemIds });
+}
+
+// ─── choice-item gating (requires / consumes / grants) ───────
+
+/**
+ * Replace one of a choice's item arrays (`requires`,
+ * `consumes`, or `grants`). Passing an empty array removes the
+ * field. The other two arrays are left untouched.
+ */
+export function setChoiceItemList(
+	json: AdventureJson,
+	sceneId: string,
+	choiceIndex: number,
+	field: 'requires' | 'consumes' | 'grants',
+	itemIds: string[]
+): AdventureJson {
+	const scene = json.scenes[sceneId];
+	if (!scene) return json;
+	const choice = scene.choices[choiceIndex];
+	if (!choice) return json;
+	const next: Choice = { ...choice };
+	if (itemIds.length === 0) {
+		delete next[field];
+	} else {
+		next[field] = itemIds;
+	}
+	// Same removal trick as setSceneItems -- bypass updateChoice
+	// (which spreads partial) and rebuild the choice list with
+	// the new object so deleted fields actually vanish.
+	const choices = scene.choices.map((c, i) => (i === choiceIndex ? next : c));
+	return {
+		...json,
+		scenes: { ...json.scenes, [sceneId]: { ...scene, choices } }
+	};
 }

@@ -23,7 +23,13 @@ import {
 	addTier,
 	deleteTier,
 	updateShare,
-	toggleShare
+	toggleShare,
+	addItem,
+	updateItem,
+	updateItemOnUse,
+	deleteItem,
+	setSceneItems,
+	setChoiceItemList
 } from '../src/lib/edit';
 
 function baseAdventure(): AdventureJson {
@@ -251,5 +257,102 @@ describe('addSceneFromChoice', () => {
 		const { json: next, id } = addSceneFromChoice(json, 'a', 1);
 		expect(next.scenes[id].choices.length).toBeGreaterThan(0);
 		expect(next.scenes.a.choices[1].next).toBe(id);
+	});
+});
+
+describe('item catalogue helpers', () => {
+	function baseWithItems(): AdventureJson {
+		return {
+			start: 'a',
+			scenes: {
+				a: {
+					heading: 'A',
+					narration: [''],
+					items: ['key', 'rope'],
+					choices: [
+						{ label: 'use key', requires: ['key'], consumes: ['key'], next: 'b' },
+						{ label: 'free', next: 'b' }
+					]
+				},
+				b: { heading: 'B', narration: [''], choices: [{ label: 'end', next: null }] }
+			},
+			items: {
+				key: { name: 'brass key' },
+				rope: { name: 'rope' }
+			}
+		};
+	}
+
+	it('addItem mints an id-N key and pre-fills name = id', () => {
+		const json = baseWithItems();
+		const { json: next, id } = addItem(json);
+		expect(id).toMatch(/^item-\d+$/);
+		expect(next.items?.[id].name).toBe(id);
+	});
+
+	it('updateItem patches name / description', () => {
+		const json = baseWithItems();
+		const next = updateItem(json, 'key', {
+			name: 'rusted key',
+			description: 'cold to the touch'
+		});
+		expect(next.items?.key.name).toBe('rusted key');
+		expect(next.items?.key.description).toBe('cold to the touch');
+	});
+
+	it('updateItemOnUse adds an onUse effect when none existed', () => {
+		const json = baseWithItems();
+		const next = updateItemOnUse(json, 'rope', { text: 'You uncoil it.' });
+		expect(next.items?.rope.onUse?.text).toBe('You uncoil it.');
+	});
+
+	it('updateItemOnUse(null) strips the onUse field entirely', () => {
+		const json = baseWithItems();
+		const withUse = updateItemOnUse(json, 'rope', { text: 'x' });
+		const stripped = updateItemOnUse(withUse, 'rope', null);
+		expect(stripped.items?.rope.onUse).toBeUndefined();
+	});
+
+	it('deleteItem scrubs the catalogue AND every referencing field', () => {
+		const json = baseWithItems();
+		const next = deleteItem(json, 'key');
+		expect(next.items?.key).toBeUndefined();
+		// Scene's items list lost the key, rope stays
+		expect(next.scenes.a.items).toEqual(['rope']);
+		// Choice's requires + consumes lost the key — both
+		// arrays were single-item and should have collapsed.
+		expect(next.scenes.a.choices[0].requires).toBeUndefined();
+		expect(next.scenes.a.choices[0].consumes).toBeUndefined();
+	});
+
+	it('deleteItem drops the scene items field entirely when last item removed', () => {
+		const json: AdventureJson = {
+			start: 'a',
+			scenes: {
+				a: {
+					heading: 'A',
+					narration: [''],
+					items: ['only'],
+					choices: [{ label: 'go', next: null }]
+				}
+			},
+			items: { only: { name: 'only' } }
+		};
+		const next = deleteItem(json, 'only');
+		expect(next.scenes.a.items).toBeUndefined();
+	});
+
+	it('setSceneItems replaces the list and omits the field when empty', () => {
+		const json = baseWithItems();
+		const next = setSceneItems(json, 'a', []);
+		expect(next.scenes.a.items).toBeUndefined();
+	});
+
+	it('setChoiceItemList sets the named field and drops it on empty array', () => {
+		const json = baseWithItems();
+		const a = setChoiceItemList(json, 'a', 1, 'requires', ['rope']);
+		expect(a.scenes.a.choices[1].requires).toEqual(['rope']);
+		const b = setChoiceItemList(a, 'a', 1, 'requires', []);
+		expect(b.scenes.a.choices[1].requires).toBeUndefined();
 	});
 });
